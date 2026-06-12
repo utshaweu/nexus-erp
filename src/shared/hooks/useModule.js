@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import registry from '@core/registry/ModuleRegistry'
 import { useTenant } from '@core/tenant/TenantContext'
+import useStore from '@core/store/useStore'
 
 /**
  * useModule
@@ -14,6 +15,8 @@ import { useTenant } from '@core/tenant/TenantContext'
  */
 export function useModule() {
   const { tenantId, isAdmin } = useTenant()
+  const { user } = useStore()
+  const isSuperAdmin = user?.isSuperAdmin === true
 
   // Keep a React-state snapshot of installed IDs so components re-render
   const [installedIds, setInstalledIds] = useState(
@@ -32,7 +35,7 @@ export function useModule() {
   }, [])
 
   const install = useCallback(async (moduleId) => {
-    if (!isAdmin) {
+    if (!isAdmin && !isSuperAdmin) {
       toast.error('Only admins can install modules')
       return { success: false }
     }
@@ -55,10 +58,10 @@ export function useModule() {
     } finally {
       setLoadingMap(prev => ({ ...prev, [moduleId]: false }))
     }
-  }, [tenantId, isAdmin])
+  }, [tenantId, isAdmin, isSuperAdmin])
 
   const uninstall = useCallback(async (moduleId) => {
-    if (!isAdmin) {
+    if (!isAdmin && !isSuperAdmin) {
       toast.error('Only admins can uninstall modules')
       return { success: false }
     }
@@ -78,7 +81,7 @@ export function useModule() {
     } finally {
       setLoadingMap(prev => ({ ...prev, [moduleId]: false }))
     }
-  }, [tenantId, isAdmin])
+  }, [tenantId, isAdmin, isSuperAdmin])
 
   return {
     allModules:       registry.getAll(),
@@ -88,6 +91,6 @@ export function useModule() {
     install,
     uninstall,
     isLoading:    (id) => !!loadingMap[id],
-    canManage:    isAdmin,
+    canManage:    isAdmin || isSuperAdmin,
   }
 }

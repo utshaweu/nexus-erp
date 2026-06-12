@@ -27,7 +27,7 @@ const useStore = create(
         sidebarOpen: true,
         setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
-        theme: 'dark',
+        theme: 'system',
         setTheme: (theme) => set({ theme }),
 
         // ── Notifications ───────────────────────────────────

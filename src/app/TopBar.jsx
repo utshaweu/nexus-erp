@@ -1,4 +1,4 @@
-import { Bell, Menu, ChevronRight, Sun, Moon } from 'lucide-react'
+import { Bell, Menu, ChevronRight, Sun, Moon, Monitor } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useLocation, useNavigate } from 'react-router-dom'
 import useStore from '@core/store/useStore'
@@ -74,17 +74,20 @@ export default function TopBar() {
           </div>
         )}
 
-        {/* Theme toggle */}
+        {/* Theme toggle: dark → light → system → dark */}
         <button
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          onClick={() => setTheme(theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark')}
           className="p-2 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800
                      text-slate-500 dark:text-slate-400
                      hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-          aria-label="Toggle theme"
+          aria-label={`Theme: ${theme}`}
+          title={`Theme: ${theme} — click to cycle`}
         >
           {theme === 'dark'
-            ? <Sun  className="w-4 h-4" />
-            : <Moon className="w-4 h-4" />}
+            ? <Sun     className="w-4 h-4" />
+            : theme === 'light'
+            ? <Moon    className="w-4 h-4" />
+            : <Monitor className="w-4 h-4" />}
         </button>
 
         {/* Notification bell */}

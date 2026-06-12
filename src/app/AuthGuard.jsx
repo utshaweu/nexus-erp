@@ -9,8 +9,8 @@ import { Button, Input } from '@shared/components/ui'
 function LoginPage() {
   const { signIn, signUp } = useAuth()
   const [mode, setMode]     = useState('login')
-  const [email, setEmail]   = useState('demo@nexuserp.com')
-  const [password, setPw]   = useState('demo123456')
+  const [email, setEmail]   = useState('superadmin@nexuserp.com')
+  const [password, setPw]   = useState('superadmin')
   const [name, setName]     = useState('')
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -37,10 +37,10 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-950 flex items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-slate-50 dark:bg-surface-950 flex items-center justify-center p-4 font-sans">
       {/* Subtle grid background */}
       <div
-        className="absolute inset-0 opacity-[0.025] pointer-events-none"
+        className="absolute inset-0 opacity-[0.04] dark:opacity-[0.025] pointer-events-none"
         style={{
           backgroundImage:
             'linear-gradient(rgba(99,102,241,1) 1px, transparent 1px),' +
@@ -56,13 +56,14 @@ function LoginPage() {
                           flex items-center justify-center mx-auto mb-4 shadow-glow">
             <span className="text-white font-display font-bold text-xl">N</span>
           </div>
-          <h1 className="font-display font-bold text-2xl text-white">NexusERP</h1>
+          <h1 className="font-display font-bold text-2xl text-slate-900 dark:text-white">NexusERP</h1>
           <p className="text-sm text-slate-500 mt-1">Enterprise Resource Planning</p>
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-surface-800 bg-surface-900/60 backdrop-blur p-8">
-          <h2 className="font-display font-semibold text-slate-100 text-lg mb-6">
+        <div className="rounded-2xl border border-slate-200 bg-white/80 backdrop-blur p-8
+                        dark:border-surface-800 dark:bg-surface-900/60">
+          <h2 className="font-display font-semibold text-slate-800 dark:text-slate-100 text-lg mb-6">
             {mode === 'login' ? 'Sign in to your account' : 'Create an account'}
           </h2>
 
@@ -88,7 +89,7 @@ function LoginPage() {
 
             {/* Password with show/hide */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+              <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                 Password
               </label>
               <div className="relative">
@@ -98,15 +99,21 @@ function LoginPage() {
                   onChange={e => setPw(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full px-3 py-2 pr-10 rounded-lg text-sm text-slate-200
-                             placeholder:text-slate-600 bg-surface-900 border border-surface-700
-                             hover:border-surface-600 focus:outline-none focus:ring-1
-                             focus:ring-brand-500 focus:border-brand-500 transition-colors"
+                  className="w-full px-3 py-2 pr-10 rounded-lg text-sm
+                             text-slate-800 placeholder:text-slate-400
+                             bg-white border border-slate-300
+                             hover:border-slate-400 focus:outline-none focus:ring-1
+                             focus:ring-brand-500 focus:border-brand-500 transition-colors
+                             dark:text-slate-200 dark:placeholder:text-slate-600
+                             dark:bg-surface-900 dark:border-surface-700
+                             dark:hover:border-surface-600"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw(p => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2
+                             text-slate-400 hover:text-slate-600
+                             dark:text-slate-500 dark:hover:text-slate-300"
                 >
                   {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
@@ -116,8 +123,8 @@ function LoginPage() {
             {msg.text && (
               <p className={`text-xs px-3 py-2 rounded-lg border ${
                 msg.type === 'success'
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : 'bg-red-500/10 text-red-400 border-red-500/20'
+                  ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
+                  : 'bg-red-500/10 text-red-600 border-red-500/20 dark:text-red-400'
               }`}>
                 {msg.text}
               </p>
@@ -128,7 +135,7 @@ function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-4 pt-4 border-t border-surface-800 text-center">
+          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-surface-800 text-center">
             <button
               onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setMsg({ text:'', type:'' }) }}
               className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
@@ -140,11 +147,12 @@ function LoginPage() {
           </div>
 
           {/* Demo hint */}
-          <div className="mt-3 p-3 rounded-lg bg-surface-800/50 border border-surface-700">
+          <div className="mt-3 p-3 rounded-lg bg-slate-100 border border-slate-200
+                          dark:bg-surface-800/50 dark:border-surface-700">
             <p className="text-xs text-slate-500 text-center">
-              Demo: <span className="text-slate-400 font-mono">demo@nexuserp.com</span>
+              Demo: <span className="text-slate-600 dark:text-slate-400 font-mono">demo@nexuserp.com</span>
               {' / '}
-              <span className="text-slate-400 font-mono">demo123456</span>
+              <span className="text-slate-600 dark:text-slate-400 font-mono">demo123456</span>
             </p>
           </div>
         </div>
@@ -156,17 +164,17 @@ function LoginPage() {
 // ── No-tenant error screen ────────────────────────────────────
 function NoTenantScreen({ error, onSignOut }) {
   return (
-    <div className="min-h-screen bg-surface-950 flex items-center justify-center font-sans">
+    <div className="min-h-screen bg-slate-50 dark:bg-surface-950 flex items-center justify-center font-sans">
       <div className="text-center max-w-sm px-4">
         <div className="w-12 h-12 rounded-2xl bg-red-500/20 flex items-center justify-center mx-auto mb-4">
-          <span className="text-red-400 text-xl">⚠</span>
+          <span className="text-red-500 dark:text-red-400 text-xl">⚠</span>
         </div>
-        <h2 className="font-display font-bold text-white text-lg mb-2">No Workspace Found</h2>
-        <p className="text-slate-400 text-sm mb-2">
+        <h2 className="font-display font-bold text-slate-900 dark:text-white text-lg mb-2">No Workspace Found</h2>
+        <p className="text-slate-600 dark:text-slate-400 text-sm mb-2">
           Your account is not linked to any client workspace.
         </p>
         {error && (
-          <p className="text-red-400 text-xs font-mono mb-4 bg-red-500/10 border
+          <p className="text-red-600 dark:text-red-400 text-xs font-mono mb-4 bg-red-500/10 border
                         border-red-500/20 rounded-lg px-3 py-2">
             {error}
           </p>
@@ -183,7 +191,7 @@ function NoTenantScreen({ error, onSignOut }) {
 // ── Full-screen boot loader ───────────────────────────────────
 function BootLoader({ message = 'Loading…' }) {
   return (
-    <div className="min-h-screen bg-surface-950 flex items-center justify-center font-sans">
+    <div className="min-h-screen bg-slate-50 dark:bg-surface-950 flex items-center justify-center font-sans">
       <div className="text-center">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700
                         flex items-center justify-center mx-auto mb-3">
