@@ -10,7 +10,7 @@ import {
   Table, Thead, Th, Tbody, Tr, Td, Modal, Input, PageHeader, StatCard,
 } from '@shared/components/ui'
 import { clsx } from 'clsx'
-import toast from 'react-hot-toast'
+import toast from '@shared/lib/toast'
 
 // All available module IDs (must match manifest ids)
 const ALL_MODULE_IDS = [
@@ -96,6 +96,11 @@ function CreateTenantModal({ open, onClose, onCreated }) {
     }
     setSaving(true)
     try {
+      // Save the super admin session tokens so we can restore them after signUp
+      // switches the client session to the newly-created user.
+      const { data: { session: adminSession } } = await supabase.auth.getSession()
+
+      // 1. Create the tenant row — super admin session is still active here
       const { data: tenant, error: tenantErr } = await supabase
         .from('tenants')
         .insert({ name: form.name, slug: form.slug, plan: form.plan })
@@ -103,33 +108,36 @@ function CreateTenantModal({ open, onClose, onCreated }) {
         .single()
       if (tenantErr) throw tenantErr
 
+      // 2. Create the auth user — session switches to new user after this call
       const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: form.adminEmail,
+        email:    form.adminEmail,
         password: form.adminPassword,
-        options: { data: { full_name: form.adminName, role: 'admin' } },
+        options:  { data: { full_name: form.adminName, role: 'admin' } },
       })
       if (authErr) throw authErr
 
       const userId = authData.user?.id
       if (!userId) throw new Error('User creation failed — check Supabase Auth settings')
 
-      const { error: memberErr } = await supabase.from('tenant_users').insert({
-        tenant_id: tenant.id,
-        user_id:   userId,
-        role:      'owner',
-        full_name: form.adminName || form.adminEmail,
+      // 3. Create membership + install modules via SECURITY DEFINER RPC.
+      //    This bypasses RLS so it works even though the client is now in the
+      //    new user's session. The function allows a freshly-created user with
+      //    no existing memberships to link themselves to their first tenant.
+      const { error: setupErr } = await supabase.rpc('setup_tenant_user', {
+        p_tenant_id:  tenant.id,
+        p_user_id:    userId,
+        p_role:       'owner',
+        p_full_name:  form.adminName || form.adminEmail,
+        p_module_ids: form.modules,
       })
-      if (memberErr) throw memberErr
+      if (setupErr) throw setupErr
 
-      if (form.modules.length > 0) {
-        const { error: modErr } = await supabase.from('tenant_modules').insert(
-          form.modules.map(module_id => ({
-            tenant_id:    tenant.id,
-            module_id,
-            installed_by: userId,
-          }))
-        )
-        if (modErr) throw modErr
+      // 4. Restore super admin session so the UI stays on the admin panel
+      if (adminSession) {
+        await supabase.auth.setSession({
+          access_token:  adminSession.access_token,
+          refresh_token: adminSession.refresh_token,
+        })
       }
 
       toast.success(`Tenant "${form.name}" created successfully`)

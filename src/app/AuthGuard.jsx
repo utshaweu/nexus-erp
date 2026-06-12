@@ -4,6 +4,7 @@ import { useAuth } from '@shared/hooks/useAuth'
 import { useTenant } from '@core/tenant/TenantContext'
 import { usePermissions } from '@core/permissions/PermissionContext'
 import { Button, Input } from '@shared/components/ui'
+import toast from '@shared/lib/toast'
 
 // ── Login Page ────────────────────────────────────────────────
 function LoginPage() {
@@ -14,22 +15,19 @@ function LoginPage() {
   const [name, setName]     = useState('')
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [msg, setMsg]       = useState({ text: '', type: '' })
-
-  const showMessage = (text, type = 'error') => setMsg({ text, type })
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setMsg({ text: '', type: '' })
     setLoading(true)
     try {
       if (mode === 'login') {
         const { error } = await signIn(email, password)
-        if (error) showMessage(error.message)
+        if (error) toast.error(error.message)
+        else toast.success(`Welcome back, ${email}!`)
       } else {
         const { error } = await signUp(email, password, name)
-        if (error) showMessage(error.message)
-        else showMessage('Check your email to confirm your account.', 'success')
+        if (error) toast.error(error.message)
+        else toast.info(`Confirmation email sent to ${email}. Please check your inbox.`)
       }
     } finally {
       setLoading(false)
@@ -120,16 +118,6 @@ function LoginPage() {
               </div>
             </div>
 
-            {msg.text && (
-              <p className={`text-xs px-3 py-2 rounded-lg border ${
-                msg.type === 'success'
-                  ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
-                  : 'bg-red-500/10 text-red-600 border-red-500/20 dark:text-red-400'
-              }`}>
-                {msg.text}
-              </p>
-            )}
-
             <Button type="submit" loading={loading} className="w-full mt-2">
               {mode === 'login' ? 'Sign In' : 'Create Account'}
             </Button>
@@ -137,7 +125,7 @@ function LoginPage() {
 
           <div className="mt-4 pt-4 border-t border-slate-200 dark:border-surface-800 text-center">
             <button
-              onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setMsg({ text:'', type:'' }) }}
+              onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}
               className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
             >
               {mode === 'login'

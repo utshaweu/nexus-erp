@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import toast from 'react-hot-toast'
+import toast from '@shared/lib/toast'
 import registry from '@core/registry/ModuleRegistry'
 import { useTenant } from '@core/tenant/TenantContext'
 import useStore from '@core/store/useStore'

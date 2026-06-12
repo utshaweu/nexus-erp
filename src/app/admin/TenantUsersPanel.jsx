@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/shared/api/supabase'
+import useStore from '@core/store/useStore'
 import {
   Users, Plus, Shield, ChevronDown, ChevronUp,
   CheckCircle2, XCircle, RefreshCw, UserPlus, Save,
@@ -9,7 +10,7 @@ import {
   Table, Thead, Th, Tbody, Tr, Td, Modal, Input, PageHeader,
 } from '@shared/components/ui'
 import { clsx } from 'clsx'
-import toast from 'react-hot-toast'
+import toast from '@shared/lib/toast'
 import { useTenant } from '@core/tenant/TenantContext'
 import { usePermissions } from '@core/permissions/PermissionContext'
 import { ACTIONS, ROLE_DEFAULTS, buildPermissionMap } from '@core/permissions/permissions'
@@ -295,6 +296,10 @@ function AddUserModal({ open, onClose, tenantId, onAdded }) {
     }
     setSaving(true)
     try {
+      // Save current session — signUp() will switch to the new user's session
+      const { data: { session: currentSession } } = await supabase.auth.getSession()
+
+      // 1. Create the auth user
       const { data, error: authErr } = await supabase.auth.signUp({
         email:    form.email,
         password: form.password,
@@ -305,13 +310,24 @@ function AddUserModal({ open, onClose, tenantId, onAdded }) {
       const userId = data.user?.id
       if (!userId) throw new Error('User creation failed')
 
-      const { error: memberErr } = await supabase.from('tenant_users').insert({
-        tenant_id: tenantId,
-        user_id:   userId,
-        role:      form.role,
-        full_name: form.fullName || form.email,
+      // 2. Link user to this tenant via SECURITY DEFINER RPC — bypasses RLS so
+      //    the insert works even though the session is now the new user's.
+      const { error: setupErr } = await supabase.rpc('setup_tenant_user', {
+        p_tenant_id:  tenantId,
+        p_user_id:    userId,
+        p_role:       form.role,
+        p_full_name:  form.fullName || form.email,
+        p_module_ids: [],
       })
-      if (memberErr) throw memberErr
+      if (setupErr) throw setupErr
+
+      // 3. Restore the admin's session so the UI stays on the team panel
+      if (currentSession) {
+        await supabase.auth.setSession({
+          access_token:  currentSession.access_token,
+          refresh_token: currentSession.refresh_token,
+        })
+      }
 
       toast.success(`User ${form.email} added`)
       onAdded()
@@ -381,6 +397,7 @@ function AddUserModal({ open, onClose, tenantId, onAdded }) {
 export default function TenantUsersPanel() {
   const { tenantId, tenantName, isAdmin } = useTenant()
   const { refreshPermissions }            = usePermissions()
+  const { user: currentUser }             = useStore()
 
   const [users, setUsers]             = useState([])
   const [loading, setLoading]         = useState(true)
@@ -416,20 +433,23 @@ export default function TenantUsersPanel() {
       .eq('user_id',   userId)
 
     if (error) { toast.error(error.message); return }
+    // Update local state — avoids a re-fetch that can trip RLS after mutations
+    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, role: newRole } : u))
     toast.success('Role updated')
-    loadUsers()
   }
 
-  const handleToggleActive = async (user) => {
+  const handleToggleActive = async (u) => {
+    const next = !u.is_active
     const { error } = await supabase
       .from('tenant_users')
-      .update({ is_active: !user.is_active })
+      .update({ is_active: next })
       .eq('tenant_id', tenantId)
-      .eq('user_id',   user.user_id)
+      .eq('user_id',   u.user_id)
 
     if (error) { toast.error(error.message); return }
-    toast.success(user.is_active ? 'User deactivated' : 'User activated')
-    loadUsers()
+    // Update local state directly so inactive users stay visible in the table
+    setUsers(prev => prev.map(usr => usr.user_id === u.user_id ? { ...usr, is_active: next } : usr))
+    toast.success(next ? 'User activated' : 'User deactivated')
   }
 
   if (!isAdmin) {
@@ -473,6 +493,7 @@ export default function TenantUsersPanel() {
             <div className="divide-y divide-surface-200 dark:divide-surface-800">
               {users.map(u => {
                 const isExpanded = expandedUser === u.user_id
+                const isSelf     = u.user_id === currentUser?.id
 
                 return (
                   <div key={u.id}>
@@ -491,6 +512,9 @@ export default function TenantUsersPanel() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
                           {u.full_name ?? '—'}
+                          {isSelf && (
+                            <span className="ml-1.5 text-xs font-normal text-brand-500 dark:text-brand-400">(you)</span>
+                          )}
                         </p>
                         <p className="text-xs text-slate-500 truncate">
                           {u.is_active ? 'Active' : 'Inactive'} ·
@@ -498,15 +522,19 @@ export default function TenantUsersPanel() {
                         </p>
                       </div>
 
-                      {/* Role selector */}
+                      {/* Role selector — disabled for own row */}
                       <select
                         value={u.role}
+                        disabled={isSelf}
                         onChange={e => handleRoleChange(u.user_id, e.target.value)}
-                        className="px-2 py-1 rounded-lg text-xs
-                                   bg-white dark:bg-surface-800
-                                   border border-surface-200 dark:border-surface-700
-                                   text-slate-700 dark:text-slate-300
-                                   focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        className={clsx(
+                          'px-2 py-1 rounded-lg text-xs',
+                          'bg-white dark:bg-surface-800',
+                          'border border-surface-200 dark:border-surface-700',
+                          'text-slate-700 dark:text-slate-300',
+                          'focus:outline-none focus:ring-1 focus:ring-brand-500',
+                          isSelf && 'opacity-40 cursor-not-allowed'
+                        )}
                       >
                         {['owner','admin','manager','user','viewer'].map(r => (
                           <option key={r} value={r}>{r}</option>
@@ -515,18 +543,20 @@ export default function TenantUsersPanel() {
 
                       <Badge color={ROLE_COLOR[u.role]}>{u.role}</Badge>
 
-                      {/* Active toggle */}
-                      <button
-                        onClick={() => handleToggleActive(u)}
-                        className={clsx(
-                          'px-2.5 py-1 rounded-lg text-xs font-medium border transition-all',
-                          u.is_active
-                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 hover:border-red-500/20'
-                            : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 hover:border-emerald-500/20'
-                        )}
-                      >
-                        {u.is_active ? 'Active' : 'Inactive'}
-                      </button>
+                      {/* Active toggle — hidden for own row so admins can't lock themselves out */}
+                      {!isSelf && (
+                        <button
+                          onClick={() => handleToggleActive(u)}
+                          className={clsx(
+                            'px-2.5 py-1 rounded-lg text-xs font-medium border transition-all',
+                            u.is_active
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 hover:border-red-500/20'
+                              : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-400 hover:border-emerald-500/20'
+                          )}
+                        >
+                          {u.is_active ? 'Active' : 'Inactive'}
+                        </button>
+                      )}
 
                       {/* Expand permissions */}
                       <button
@@ -558,8 +588,7 @@ export default function TenantUsersPanel() {
                           user={u}
                           tenantId={tenantId}
                           onSaved={() => {
-                            const currentUser = window.__erp_user__
-                            if (currentUser?.id === u.user_id) {
+                            if (window.__erp_user__?.id === u.user_id) {
                               refreshPermissions()
                             }
                           }}
