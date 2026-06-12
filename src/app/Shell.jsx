@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { clsx } from 'clsx'
@@ -39,12 +39,27 @@ import approvalModule      from '@modules/approval'
  */
 export default function Shell() {
   const { sidebarOpen, theme } = useStore()
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches
+  )
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
+    if (theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)')
+      const handler = (e) => {
+        document.documentElement.classList.toggle('dark', e.matches)
+        setSystemDark(e.matches)
+      }
+      document.documentElement.classList.toggle('dark', mq.matches)
+      setSystemDark(mq.matches)
+      mq.addEventListener('change', handler)
+      return () => mq.removeEventListener('change', handler)
+    } else {
+      document.documentElement.classList.toggle('dark', theme === 'dark')
+    }
   }, [theme])
 
-  const isDark = theme === 'dark'
+  const isDark = theme === 'dark' || (theme === 'system' && systemDark)
   const toastStyle = isDark
     ? { background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155' }
     : { background: '#ffffff', color: '#1e293b', border: '1px solid #e2e8f0' }

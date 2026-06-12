@@ -46,19 +46,23 @@ export function useAuth() {
     setSession(session)
     window.__erp_user__ = user
 
-    // 2. Load the tenant this user belongs to
-    await tenantCtx.loadTenantForUser(rawUser.id)
+    // Super admins have no tenant_users row — they access all tenants
+    // via the /admin panel. Skip steps 2-4 entirely for them.
+    if (!user.isSuperAdmin) {
+      // 2. Load the tenant this user belongs to
+      await tenantCtx.loadTenantForUser(rawUser.id)
 
-    // window.__erp_tenant__ is set by TenantContext after step 2
-    const tenantId = window.__erp_tenant__?.id
-    if (!tenantId) return // no tenant → AuthGuard will show error screen
+      // window.__erp_tenant__ is set by TenantContext after step 2
+      const tenantId = window.__erp_tenant__?.id
+      if (!tenantId) return // no tenant → AuthGuard will show error screen
 
-    // 3. Load installed modules for this tenant
-    await registry.loadForTenant(tenantId)
+      // 3. Load installed modules for this tenant
+      await registry.loadForTenant(tenantId)
 
-    // 4. Load per-user permission overrides
-    //    This populates window.__erp_user__.permissions
-    await permissionCtx.loadPermissions(rawUser.id, tenantId)
+      // 4. Load per-user permission overrides
+      //    This populates window.__erp_user__.permissions
+      await permissionCtx.loadPermissions(rawUser.id, tenantId)
+    }
   }
 
   // ── Teardown ──────────────────────────────────────────────────

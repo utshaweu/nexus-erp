@@ -19,7 +19,7 @@ const TenantContext = createContext(null)
 export function TenantProvider({ children }) {
   const [tenant, setTenant]         = useState(null)   // current tenant row
   const [tenantUser, setTenantUser] = useState(null)   // current membership row
-  const [loading, setLoading]       = useState(true)
+  const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState(null)
 
   /**
@@ -38,7 +38,7 @@ export function TenantProvider({ children }) {
         .select('*, tenant:tenants(*)')
         .eq('user_id', userId)
         .eq('is_active', true)
-        .single()
+        .maybeSingle()
 
       if (memberErr) throw memberErr
       if (!membership) throw new Error('No tenant membership found for this user.')

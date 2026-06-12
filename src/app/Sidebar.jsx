@@ -251,7 +251,7 @@ export default function Sidebar() {
                 {tenantUser?.full_name ?? user?.name ?? 'User'}
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-600 capitalize truncate">
-                {tenantUser?.role ?? 'member'}
+                {tenantUser?.role ?? (user?.isSuperAdmin ? 'super admin' : 'member')}
               </p>
             </div>
             <button
