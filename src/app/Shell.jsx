@@ -10,6 +10,7 @@ import registry from '@core/registry/ModuleRegistry'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 import AuthGuard from './AuthGuard'
+import { AuthProvider } from '@shared/hooks/useAuth'
 
 // ── Register all module manifests (once, before any login) ────
 import purchaseModule      from '@modules/purchase'
@@ -69,37 +70,44 @@ export default function Shell() {
     <BrowserRouter>
       <TenantProvider>
         <PermissionProvider>
-          <AuthGuard>
-            <div className="flex h-screen bg-slate-50 dark:bg-surface-950 font-sans text-slate-800 dark:text-slate-200 overflow-hidden">
+          <AuthProvider>
+            <AuthGuard>
+              <div className="flex h-screen bg-slate-50 dark:bg-surface-950 font-sans text-slate-800 dark:text-slate-200 overflow-hidden">
 
-              <Sidebar />
+                <Sidebar />
 
-              <div className={clsx(
-                'flex-1 flex flex-col min-w-0 transition-all duration-300 lg:ml-60'
-              )}>
-                <TopBar />
-                <main className="flex-1 overflow-y-auto">
-                  <div className="px-6 py-6 max-w-screen-2xl mx-auto">
-                    <DynamicRouter />
-                  </div>
-                </main>
+                <div className={clsx(
+                  'flex-1 flex flex-col min-w-0 transition-all duration-300 lg:ml-60'
+                )}>
+                  <TopBar />
+                  <main className="flex-1 overflow-y-auto">
+                    <div className="px-6 py-6 max-w-screen-2xl mx-auto">
+                      <DynamicRouter />
+                    </div>
+                  </main>
+                </div>
+
               </div>
+            </AuthGuard>
+          </AuthProvider>
 
-            </div>
-
-            <Toaster
-              position="bottom-right"
-              toastOptions={{
-                style: {
-                  ...toastStyle,
-                  borderRadius: '12px',
-                  fontSize:     '13px',
-                },
-                success: { iconTheme: { primary: '#10b981', secondary: toastIconBg } },
-                error:   { iconTheme: { primary: '#ef4444', secondary: toastIconBg } },
-              }}
-            />
-          </AuthGuard>
+          {/* Toaster lives outside AuthGuard so toasts work on the login page too */}
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              duration: 3500,
+              style: {
+                ...toastStyle,
+                borderRadius: '12px',
+                fontSize:     '13px',
+                padding:      '10px 14px',
+                maxWidth:     '320px',
+              },
+              success: { iconTheme: { primary: '#10b981', secondary: toastIconBg } },
+              error:   { iconTheme: { primary: '#ef4444', secondary: toastIconBg } },
+              loading: { iconTheme: { primary: '#6366f1', secondary: toastIconBg } },
+            }}
+          />
         </PermissionProvider>
       </TenantProvider>
     </BrowserRouter>

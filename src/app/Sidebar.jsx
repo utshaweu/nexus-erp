@@ -13,6 +13,7 @@ import { useTenant } from '@core/tenant/TenantContext'
 import { usePermissions } from '@core/permissions/PermissionContext'
 import { useAuth } from '@shared/hooks/useAuth'
 import useStore from '@core/store/useStore'
+import toast from '@shared/lib/toast'
 
 // Maps icon name strings (from manifests) to Lucide components.
 // Adding a new icon = add one entry here. No other file changes needed.
@@ -30,7 +31,7 @@ function NavItem({ item }) {
   return (
     <NavLink
       to={item.path}
-      end={item.path === '/'}
+      end
       className={({ isActive }) => clsx(
         'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium',
         'transition-all duration-150 border',
@@ -127,7 +128,7 @@ function ModuleSection({ manifest, canFn }) {
 // ── Main Sidebar ──────────────────────────────────────────────
 export default function Sidebar() {
   const { sidebarOpen, setSidebarOpen } = useStore()
-  const { tenant, tenantUser, isAdmin } = useTenant()
+  const { tenant, tenantUser, isAdmin, isManager } = useTenant()
   const { user, signOut }               = useAuth()
   // can() from PermissionContext — reactive, re-renders when permissions change
   const { can, canAccessModule }        = usePermissions()
@@ -184,8 +185,12 @@ export default function Sidebar() {
         <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-0.5 scrollbar-thin">
 
           {/* Core links — always visible regardless of permissions */}
-          <NavItem item={{ id:'home',  label:'Dashboard', path:'/',     icon:'LayoutDashboard' }} />
-          <NavItem item={{ id:'store', label:'App Store',  path:'/apps', icon:'Store' }} />
+          <NavItem item={{ id:'home', label:'Dashboard', path:'/', icon:'LayoutDashboard' }} />
+
+          {/* App Store — managers and above only */}
+          {(isSuperAdmin || isManager) && (
+            <NavItem item={{ id:'store', label:'App Store', path:'/apps', icon:'Store' }} />
+          )}
 
           {/* Tenant user management — visible to admins */}
           {isAdmin && (
@@ -255,7 +260,7 @@ export default function Sidebar() {
               </p>
             </div>
             <button
-              onClick={signOut}
+              onClick={() => { toast.success('Signed out successfully'); signOut() }}
               className="opacity-0 group-hover:opacity-100 transition-opacity p-1
                          rounded hover:bg-surface-200 dark:hover:bg-surface-700"
               title="Sign out"

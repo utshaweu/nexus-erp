@@ -193,7 +193,7 @@ function ModuleCard({ manifest }) {
               </Button>
             ) : (
               <>
-                <Button variant="ghost" size="sm" onClick={() => setShowDetail(true)} className="flex-1">
+                <Button variant="secondary" size="sm" onClick={() => setShowDetail(true)} className="flex-1">
                   Details
                 </Button>
                 {canManage && (

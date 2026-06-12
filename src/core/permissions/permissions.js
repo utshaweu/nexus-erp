@@ -58,12 +58,14 @@ export const ROLE_DEFAULTS = Object.freeze({
     [ACTIONS.VIEW]: true, [ACTIONS.CREATE]: true, [ACTIONS.EDIT]: true,
     [ACTIONS.DELETE]: false, [ACTIONS.APPROVE]: true, [ACTIONS.EXPORT]: true,
   },
+  // user/viewer: VIEW is false so they only see modules explicitly granted by an admin.
+  // Once granted VIEW, their create/edit/export defaults still apply.
   [ROLES.USER]: {
-    [ACTIONS.VIEW]: true, [ACTIONS.CREATE]: true, [ACTIONS.EDIT]: true,
+    [ACTIONS.VIEW]: false, [ACTIONS.CREATE]: true, [ACTIONS.EDIT]: true,
     [ACTIONS.DELETE]: false, [ACTIONS.APPROVE]: false, [ACTIONS.EXPORT]: false,
   },
   [ROLES.VIEWER]: {
-    [ACTIONS.VIEW]: true, [ACTIONS.CREATE]: false, [ACTIONS.EDIT]: false,
+    [ACTIONS.VIEW]: false, [ACTIONS.CREATE]: false, [ACTIONS.EDIT]: false,
     [ACTIONS.DELETE]: false, [ACTIONS.APPROVE]: false, [ACTIONS.EXPORT]: false,
   },
 })

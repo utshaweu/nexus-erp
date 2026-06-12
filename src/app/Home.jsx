@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Store, Package, Activity, ArrowRight, ShieldCheck } from 'lucide-react'
 import { useModule } from '@shared/hooks/useModule'
 import { useTenant } from '@core/tenant/TenantContext'
+import { usePermissions } from '@core/permissions/PermissionContext'
 import { Card, StatCard } from '@shared/components/ui'
 
 // ── Welcome screen shown when no modules are installed ────────
@@ -70,13 +71,21 @@ function ModuleCard({ manifest }) {
 // ── Main Home page ────────────────────────────────────────────
 export default function Home() {
   const { installedModules, allModules } = useModule()
-  const { tenant, tenantName, isAdmin }  = useTenant()
+  const { tenant, tenantName, isAdmin, isManager } = useTenant()
+  const { canAccessModule } = usePermissions()
   const user = window.__erp_user__
   const isSuperAdmin = user?.isSuperAdmin ?? false
 
+  const isElevated = isSuperAdmin || isManager
+
+  // Managers+ see all installed modules; user/viewer see only modules they can access
+  const visibleModules = isElevated
+    ? installedModules
+    : installedModules.filter(m => canAccessModule(m.id))
+
   const userName    = window.__erp_tenant_user__?.full_name ?? user?.name ?? 'Admin'
   const firstName   = userName.split(' ')[0]
-  const hasModules  = installedModules.length > 0
+  const hasModules  = visibleModules.length > 0
 
   return (
     <div>
@@ -115,23 +124,27 @@ export default function Home() {
         <EmptyState isAdmin={isAdmin} />
       ) : (
         <div className="space-y-8">
-          {/* Stats row */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Active Modules"    value={installedModules.length} icon={Package}  color="#6366f1" />
-            <StatCard label="Available Modules" value={allModules.length - installedModules.length} icon={Store} color="#8b5cf6" />
-            <StatCard label="System Status"     value="Online"                  icon={Activity} color="#10b981" />
-            <StatCard
-              label="Workspace"
-              value={tenant?.plan ?? '—'}
-              icon={ShieldCheck}
-              color="#f59e0b"
-            />
-          </div>
+          {/* Stats row — managers/admins/owners only */}
+          {isElevated && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard label="Active Modules"    value={installedModules.length} icon={Package}  color="#6366f1" />
+              <StatCard label="Available Modules" value={allModules.length - installedModules.length} icon={Store} color="#8b5cf6" />
+              <StatCard label="System Status"     value="Online"                  icon={Activity} color="#10b981" />
+              <StatCard
+                label="Workspace"
+                value={tenant?.plan ?? '—'}
+                icon={ShieldCheck}
+                color="#f59e0b"
+              />
+            </div>
+          )}
 
-          {/* Installed modules grid */}
+          {/* Modules grid */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display font-semibold text-slate-900 dark:text-slate-100">Active Modules</h2>
+              <h2 className="font-display font-semibold text-slate-900 dark:text-slate-100">
+                {isElevated ? 'Active Modules' : 'My Modules'}
+              </h2>
               {isAdmin && (
                 <Link to="/apps" className="text-xs text-brand-600 dark:text-brand-400
                                             hover:text-brand-500 dark:hover:text-brand-300
@@ -141,7 +154,7 @@ export default function Home() {
               )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {installedModules.map(m => <ModuleCard key={m.id} manifest={m} />)}
+              {visibleModules.map(m => <ModuleCard key={m.id} manifest={m} />)}
             </div>
           </div>
 
@@ -149,7 +162,7 @@ export default function Home() {
           <Card className="p-5">
             <h2 className="font-display font-semibold text-slate-900 dark:text-slate-100 mb-4">Quick Navigation</h2>
             <div className="flex flex-wrap gap-2">
-              {installedModules.flatMap(m =>
+              {visibleModules.flatMap(m =>
                 (m.menuItems ?? []).slice(0, 2).map(item => (
                   <Link
                     key={item.id}

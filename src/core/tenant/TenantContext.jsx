@@ -47,8 +47,14 @@ export function TenantProvider({ children }) {
       setTenant(membership.tenant)
 
       // Expose globally so non-React code (e.g. EventBus handlers) can read it
-      window.__erp_tenant__     = membership.tenant
+      window.__erp_tenant__      = membership.tenant
       window.__erp_tenant_user__ = membership
+
+      // Sync role onto __erp_user__ so the permission engine (which reads
+      // window.__erp_user__.role) resolves ROLE_DEFAULTS correctly.
+      if (window.__erp_user__) {
+        window.__erp_user__.role = membership.role
+      }
 
     } catch (err) {
       setError(err.message)
@@ -66,6 +72,9 @@ export function TenantProvider({ children }) {
     setError(null)
     window.__erp_tenant__      = null
     window.__erp_tenant_user__ = null
+    if (window.__erp_user__) {
+      window.__erp_user__.role = null
+    }
   }, [])
 
   /** Refresh tenant settings from DB (e.g. after settings save) */
