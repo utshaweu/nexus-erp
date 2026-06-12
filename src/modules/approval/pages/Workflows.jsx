@@ -1,6 +1,10 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { GitBranch, Plus, Settings, Users, ArrowRight, Trash2 } from 'lucide-react'
-import { Button, Badge, PageHeader, Card, Modal, Input } from '@shared/components/ui'
+import { Button, Badge, PageHeader, Card, Modal, Input, Select } from '@shared/components/ui'
+import toast from '@shared/lib/toast'
 
 const WORKFLOWS = [
   {
@@ -38,6 +42,12 @@ const MODULE_COLORS = {
   purchase: '#f59e0b', hr: '#ec4899', assets: '#f97316', sales: '#10b981',
 }
 
+const workflowSchema = z.object({
+  name:    z.string().trim().min(1, 'Workflow name is required'),
+  module:  z.string().min(1, 'Module is required'),
+  trigger: z.string().trim().min(1, 'Trigger condition is required'),
+})
+
 function WorkflowCard({ workflow }) {
   return (
     <Card className="p-5">
@@ -60,7 +70,6 @@ function WorkflowCard({ workflow }) {
         </div>
       </div>
 
-      {/* Steps visualization */}
       <div className="space-y-2">
         {workflow.steps.map((step, i) => (
           <div key={step.order} className="flex items-center gap-2">
@@ -94,34 +103,58 @@ function WorkflowCard({ workflow }) {
 }
 
 function NewWorkflowModal({ open, onClose }) {
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(workflowSchema),
+    defaultValues: { name: '', module: '', trigger: '' },
+  })
+
+  const onSubmit = async () => {
+    toast.success('Workflow created.')
+    reset()
+    onClose()
+  }
+
+  const handleClose = () => { reset(); onClose() }
+
   return (
-    <Modal open={open} onClose={onClose} title="New Approval Workflow" size="md">
-      <div className="space-y-4">
-        <Input label="Workflow Name" placeholder="e.g. Purchase Order Approval" />
-        <div>
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide block mb-1.5">Module</label>
-          <select className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 bg-surface-900 border border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500">
-            <option>Purchase</option><option>Sales</option><option>HR</option><option>Assets</option><option>Accounts</option>
-          </select>
-        </div>
-        <Input label="Trigger Condition" placeholder="e.g. Amount > $5,000" />
-        <div className="p-4 rounded-lg bg-surface-800 border border-surface-700">
-          <p className="text-xs text-slate-400 mb-3 font-medium">Approval Steps</p>
-          <div className="space-y-2">
-            {[1, 2].map(i => (
-              <div key={i} className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-brand-600/20 flex items-center justify-center text-xs font-bold text-brand-400 flex-shrink-0">{i}</span>
-                <Input placeholder={`Step ${i} approver role`} className="flex-1" />
-              </div>
-            ))}
+    <Modal open={open} onClose={handleClose} title="New Approval Workflow" size="md">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="space-y-4">
+          <Input label="Workflow Name" placeholder="e.g. Purchase Order Approval"
+            error={errors.name?.message}
+            {...register('name')} />
+          <div>
+            <Select label="Module" {...register('module')}>
+              <option value="">Select module...</option>
+              <option value="purchase">Purchase</option>
+              <option value="sales">Sales</option>
+              <option value="hr">HR</option>
+              <option value="assets">Assets</option>
+              <option value="accounts">Accounts</option>
+            </Select>
+            {errors.module && <p className="mt-1 text-xs text-red-400">{errors.module.message}</p>}
           </div>
-          <button className="mt-2 text-xs text-brand-400 hover:text-brand-300">+ Add step</button>
+          <Input label="Trigger Condition" placeholder="e.g. Amount > $5,000"
+            error={errors.trigger?.message}
+            {...register('trigger')} />
+          <div className="p-4 rounded-lg bg-surface-800 border border-surface-700">
+            <p className="text-xs text-slate-400 mb-3 font-medium">Approval Steps</p>
+            <div className="space-y-2">
+              {[1, 2].map(i => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-brand-600/20 flex items-center justify-center text-xs font-bold text-brand-400 flex-shrink-0">{i}</span>
+                  <Input placeholder={`Step ${i} approver role`} className="flex-1" />
+                </div>
+              ))}
+            </div>
+            <button type="button" className="mt-2 text-xs text-brand-400 hover:text-brand-300">+ Add step</button>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={isSubmitting}>Create Workflow</Button>
+          </div>
         </div>
-        <div className="flex gap-3 pt-2">
-          <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
-          <Button className="flex-1" onClick={() => { alert('Workflow created (demo)'); onClose() }}>Create Workflow</Button>
-        </div>
-      </div>
+      </form>
     </Modal>
   )
 }

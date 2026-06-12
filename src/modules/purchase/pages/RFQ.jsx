@@ -1,6 +1,10 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Plus, Search, Send, Eye } from 'lucide-react'
-import { Button, Badge, Table, Thead, Th, Tbody, Tr, Td, PageHeader, Card, Modal, Input } from '@shared/components/ui'
+import { Button, Badge, Table, Thead, Th, Tbody, Tr, Td, PageHeader, Card, Modal, Input, Select } from '@shared/components/ui'
+import toast from '@shared/lib/toast'
 
 const MOCK_RFQS = [
   { id: 'RFQ-2024-001', vendor: 'Acme Supplies', amount: 0, status: 'draft', date: '2024-01-14', deadline: '2024-01-21' },
@@ -18,41 +22,58 @@ const STATUS = {
   converted: { label: 'Converted to PO', color: 'purple' },
 }
 
+const rfqSchema = z.object({
+  vendor:   z.string().min(1, 'Vendor is required'),
+  deadline: z.string().min(1, 'Deadline is required'),
+  notes:    z.string().optional(),
+})
+
 function NewRFQModal({ open, onClose }) {
-  const [form, setForm] = useState({ vendor: '', deadline: '', notes: '' })
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(rfqSchema),
+    defaultValues: { vendor: '', deadline: '', notes: '' },
+  })
+
+  const onSubmit = async () => {
+    toast.success('RFQ created.')
+    reset()
+    onClose()
+  }
+
+  const handleClose = () => { reset(); onClose() }
+
   return (
-    <Modal open={open} onClose={onClose} title="New Request for Quotation" size="md">
-      <div className="space-y-4">
-        <div>
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide block mb-1.5">Vendor</label>
-          <select
-            className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 bg-surface-900 border border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            value={form.vendor}
-            onChange={e => setForm({ ...form, vendor: e.target.value })}
-          >
-            <option value="">Select vendor...</option>
-            <option>Acme Supplies</option>
-            <option>TechParts Ltd</option>
-            <option>Global Materials</option>
-            <option>FastShip Co</option>
-          </select>
+    <Modal open={open} onClose={handleClose} title="New Request for Quotation" size="md">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="space-y-4">
+          <div>
+            <Select label="Vendor" {...register('vendor')}>
+              <option value="">Select vendor...</option>
+              <option>Acme Supplies</option>
+              <option>TechParts Ltd</option>
+              <option>Global Materials</option>
+              <option>FastShip Co</option>
+            </Select>
+            {errors.vendor && <p className="mt-1 text-xs text-red-400">{errors.vendor.message}</p>}
+          </div>
+          <Input label="Quotation Deadline" type="date"
+            error={errors.deadline?.message}
+            {...register('deadline')} />
+          <div>
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-wide block mb-1.5">Notes</label>
+            <textarea
+              rows={3}
+              className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 placeholder:text-slate-600 bg-surface-900 border border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
+              placeholder="Requirements, specs..."
+              {...register('notes')}
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={isSubmitting}>Create RFQ</Button>
+          </div>
         </div>
-        <Input label="Quotation Deadline" type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} />
-        <div>
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide block mb-1.5">Notes</label>
-          <textarea
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 placeholder:text-slate-600 bg-surface-900 border border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500 resize-none"
-            placeholder="Requirements, specs..."
-            value={form.notes}
-            onChange={e => setForm({ ...form, notes: e.target.value })}
-          />
-        </div>
-        <div className="flex gap-3 pt-2">
-          <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
-          <Button className="flex-1" onClick={() => { alert('RFQ created (demo)'); onClose() }}>Create RFQ</Button>
-        </div>
-      </div>
+      </form>
     </Modal>
   )
 }

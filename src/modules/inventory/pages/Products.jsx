@@ -1,6 +1,10 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Plus, Search } from 'lucide-react'
-import { Button, Badge, Table, Thead, Th, Tbody, Tr, Td, PageHeader, Card, Modal, Input } from '@shared/components/ui'
+import { Button, Badge, Table, Thead, Th, Tbody, Tr, Td, PageHeader, Card, Modal, Input, Select } from '@shared/components/ui'
+import toast from '@shared/lib/toast'
 
 const PRODUCTS = [
   { id:'P-001', name:'USB-C Cable', sku:'SKU-001', category:'Electronics', stock:12, price:15.99, status:'low_stock' },
@@ -11,6 +15,65 @@ const PRODUCTS = [
   { id:'P-006', name:'HDMI Adapter', sku:'SKU-006', category:'Electronics', stock:8, price:24.99, status:'low_stock' },
 ]
 const STATUS = { in_stock:{ label:'In Stock', color:'green' }, low_stock:{ label:'Low Stock', color:'yellow' }, out_of_stock:{ label:'Out of Stock', color:'red' }}
+
+const productSchema = z.object({
+  name:     z.string().trim().min(1, 'Product name is required'),
+  sku:      z.string().trim().min(1, 'SKU is required'),
+  price:    z.coerce.number({ invalid_type_error: 'Enter a valid price' }).positive('Price must be greater than 0'),
+  category: z.string().min(1, 'Category is required'),
+})
+
+function NewProductModal({ open, onClose }) {
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(productSchema),
+    defaultValues: { name: '', sku: '', price: '', category: '' },
+  })
+
+  const onSubmit = async () => {
+    toast.success('Product created.')
+    reset()
+    onClose()
+  }
+
+  const handleClose = () => { reset(); onClose() }
+
+  return (
+    <Modal open={open} onClose={handleClose} title="New Product" size="md">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Input label="Product Name" placeholder="Name"
+                error={errors.name?.message}
+                {...register('name')} />
+            </div>
+            <Input label="SKU" placeholder="SKU-000"
+              error={errors.sku?.message}
+              {...register('sku')} />
+            <Input label="Unit Price" type="number" placeholder="0.00" step="0.01"
+              error={errors.price?.message}
+              {...register('price')} />
+            <div className="col-span-2">
+              <Select label="Category" {...register('category')}>
+                <option value="">Select category...</option>
+                <option>Electronics</option>
+                <option>Furniture</option>
+                <option>Supplies</option>
+                <option>Parts</option>
+              </Select>
+              {errors.category && <p className="mt-1 text-xs text-red-400">{errors.category.message}</p>}
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={isSubmitting}>Create</Button>
+          </div>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 export default function Products() {
   const [search, setSearch] = useState('')
   const [showNew, setShowNew] = useState(false)
@@ -40,25 +103,7 @@ export default function Products() {
           </Tbody>
         </Table>
       </Card>
-      <Modal open={showNew} onClose={() => setShowNew(false)} title="New Product" size="md">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2"><Input label="Product Name" placeholder="Name"/></div>
-            <Input label="SKU" placeholder="SKU-000"/>
-            <Input label="Unit Price" type="number" placeholder="0.00"/>
-            <div className="col-span-2">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wide block mb-1.5">Category</label>
-              <select className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 bg-surface-900 border border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500">
-                <option>Electronics</option><option>Furniture</option><option>Supplies</option><option>Parts</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button className="flex-1" onClick={() => { alert('Product created (demo)'); setShowNew(false) }}>Create</Button>
-          </div>
-        </div>
-      </Modal>
+      <NewProductModal open={showNew} onClose={() => setShowNew(false)} />
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CheckSquare, Clock, CheckCircle2, XCircle, Send, GitBranch, Plus, Eye, Check, X } from 'lucide-react'
 import { StatCard, Card, CardHeader, CardTitle, CardContent, Badge, Table, Thead, Th, Tbody, Tr, Td, Button, PageHeader, Modal } from '@shared/components/ui'
 import { clsx } from 'clsx'
+import toast from '@shared/lib/toast'
 
 const PENDING = [
   { id: 'APR-001', title: 'Purchase Order PO-2024-006', type: 'purchase_order', requester: 'Bob Chen', amount: 45000, submitted: '2024-01-19', priority: 'high', currentStep: 2, totalSteps: 3 },
@@ -44,7 +45,6 @@ function ApprovalCard({ item, onApprove, onReject }) {
         <Badge color={PRIORITY[item.priority].color}>{PRIORITY[item.priority].label}</Badge>
       </div>
 
-      {/* Progress steps */}
       <div className="flex items-center gap-1.5 mb-3">
         {Array.from({ length: item.totalSteps }, (_, i) => (
           <div key={i} className={clsx('h-1.5 flex-1 rounded-full transition-all', i < item.currentStep ? 'bg-brand-500' : 'bg-surface-700')} />
@@ -81,7 +81,13 @@ export default function ApprovalDashboard() {
   const handleReject = (id) => setShowComment({ id, action: 'reject' })
 
   const confirmAction = () => {
+    if (showComment.action === 'reject' && !comment.trim()) {
+      toast.error('Please provide a reason for rejection.')
+      return
+    }
+    const isApprove = showComment.action === 'approve'
     setPending(prev => prev.filter(p => p.id !== showComment.id))
+    toast.success(isApprove ? 'Request approved.' : 'Request rejected.')
     setShowComment(null)
     setComment('')
   }
@@ -107,7 +113,6 @@ export default function ApprovalDashboard() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Pending approvals */}
         <div className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-semibold text-slate-100">Pending My Approval ({pending.length})</h2>
@@ -127,7 +132,6 @@ export default function ApprovalDashboard() {
           )}
         </div>
 
-        {/* History */}
         <div>
           <h2 className="font-display font-semibold text-slate-100 mb-4">Recent Activity</h2>
           <div className="space-y-2">
@@ -149,11 +153,10 @@ export default function ApprovalDashboard() {
         </div>
       </div>
 
-      {/* Action confirmation modal */}
       <Modal
         open={!!showComment}
         onClose={() => { setShowComment(null); setComment('') }}
-        title={showComment?.action === 'approve' ? '✅ Approve Request' : '❌ Reject Request'}
+        title={showComment?.action === 'approve' ? 'Approve Request' : 'Reject Request'}
         size="sm"
       >
         <div className="space-y-4">

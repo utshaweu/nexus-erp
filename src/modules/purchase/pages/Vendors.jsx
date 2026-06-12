@@ -1,6 +1,10 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Plus, Search, Star, Phone, Mail, MapPin } from 'lucide-react'
-import { Button, Badge, PageHeader, Card, Modal, Input } from '@shared/components/ui'
+import { Button, Badge, PageHeader, Card, Modal, Input, Select } from '@shared/components/ui'
+import toast from '@shared/lib/toast'
 
 const MOCK_VENDORS = [
   { id: 1, name: 'Acme Supplies', contact: 'John Smith', email: 'john@acme.com', phone: '+1-555-0101', country: 'USA', rating: 4.5, orders: 23, totalSpend: 128000, status: 'active', category: 'General' },
@@ -9,6 +13,15 @@ const MOCK_VENDORS = [
   { id: 4, name: 'FastShip Co', contact: 'Maria Garcia', email: 'maria@fastship.com', phone: '+34-555-0104', country: 'Spain', rating: 4.7, orders: 31, totalSpend: 45000, status: 'active', category: 'Logistics' },
   { id: 5, name: 'Prime Vendors', contact: 'Wei Zhang', email: 'wei@primev.com', phone: '+86-555-0105', country: 'China', rating: 3.5, orders: 5, totalSpend: 28000, status: 'inactive', category: 'General' },
 ]
+
+const vendorSchema = z.object({
+  name:     z.string().trim().min(1, 'Company name is required'),
+  contact:  z.string().trim().optional(),
+  email:    z.string().email('Enter a valid email').or(z.literal('')),
+  phone:    z.string().trim().optional(),
+  country:  z.string().trim().optional(),
+  category: z.string().min(1, 'Category is required'),
+})
 
 function Stars({ rating }) {
   return (
@@ -71,40 +84,57 @@ function VendorCard({ vendor }) {
 }
 
 function NewVendorModal({ open, onClose }) {
-  const [form, setForm] = useState({ name: '', contact: '', email: '', phone: '', country: '', category: '' })
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(vendorSchema),
+    defaultValues: { name: '', contact: '', email: '', phone: '', country: '', category: '' },
+  })
+
+  const onSubmit = async () => {
+    toast.success('Vendor added.')
+    reset()
+    onClose()
+  }
+
+  const handleClose = () => { reset(); onClose() }
 
   return (
-    <Modal open={open} onClose={onClose} title="New Vendor" size="md">
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <Input label="Company Name" placeholder="Vendor company name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+    <Modal open={open} onClose={handleClose} title="New Vendor" size="md">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Input label="Company Name" placeholder="Vendor company name"
+                error={errors.name?.message}
+                {...register('name')} />
+            </div>
+            <Input label="Contact Person" placeholder="Full name"
+              error={errors.contact?.message}
+              {...register('contact')} />
+            <Input label="Email" type="email" placeholder="vendor@company.com"
+              error={errors.email?.message}
+              {...register('email')} />
+            <Input label="Phone" placeholder="+1-555-0000"
+              {...register('phone')} />
+            <Input label="Country" placeholder="Country"
+              {...register('country')} />
+            <div className="col-span-2">
+              <Select label="Category" {...register('category')}>
+                <option value="">Select category...</option>
+                <option>General</option>
+                <option>Technology</option>
+                <option>Raw Materials</option>
+                <option>Logistics</option>
+                <option>Services</option>
+              </Select>
+              {errors.category && <p className="mt-1 text-xs text-red-400">{errors.category.message}</p>}
+            </div>
           </div>
-          <Input label="Contact Person" placeholder="Full name" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} />
-          <Input label="Email" type="email" placeholder="vendor@company.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-          <Input label="Phone" placeholder="+1-555-0000" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
-          <Input label="Country" placeholder="Country" value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} />
-          <div className="col-span-2">
-            <label className="text-xs font-medium text-slate-400 uppercase tracking-wide block mb-1.5">Category</label>
-            <select
-              className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 bg-surface-900 border border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              value={form.category}
-              onChange={e => setForm({ ...form, category: e.target.value })}
-            >
-              <option value="">Select category...</option>
-              <option>General</option>
-              <option>Technology</option>
-              <option>Raw Materials</option>
-              <option>Logistics</option>
-              <option>Services</option>
-            </select>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={isSubmitting}>Add Vendor</Button>
           </div>
         </div>
-        <div className="flex gap-3 pt-2">
-          <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
-          <Button className="flex-1" onClick={() => { alert('Vendor created (demo)'); onClose() }}>Add Vendor</Button>
-        </div>
-      </div>
+      </form>
     </Modal>
   )
 }
@@ -112,7 +142,6 @@ function NewVendorModal({ open, onClose }) {
 export default function Vendors() {
   const [search, setSearch] = useState('')
   const [showNew, setShowNew] = useState(false)
-  const [view, setView] = useState('grid') // 'grid' | 'list'
 
   const filtered = MOCK_VENDORS.filter(v =>
     v.name.toLowerCase().includes(search.toLowerCase()) ||

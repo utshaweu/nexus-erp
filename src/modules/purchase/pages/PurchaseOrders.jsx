@@ -1,10 +1,14 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Plus, Search, Download, Eye } from 'lucide-react'
 import {
   Button, Badge, Table, Thead, Th, Tbody, Tr, Td,
-  PageHeader, Card, Modal, Input,
+  PageHeader, Card, Modal, Input, Select,
 } from '@shared/components/ui'
 import PermissionGate from '@shared/components/PermissionGate'
+import toast from '@shared/lib/toast'
 
 const MOCK_ORDERS = [
   { id:'PO-2024-001', vendor:'Acme Supplies',    amount:12500, status:'approved', date:'2024-01-15', reference:'REF-001' },
@@ -22,40 +26,53 @@ const STATUS = {
   cancelled: { label:'Cancelled', color:'red'     },
 }
 
+const orderSchema = z.object({
+  vendor:    z.string().min(1, 'Vendor is required'),
+  reference: z.string().trim().min(1, 'Reference is required'),
+  date:      z.string().min(1, 'Order date is required'),
+})
+
 function NewOrderModal({ open, onClose }) {
-  const [form, setForm] = useState({ vendor:'', reference:'', date:'' })
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(orderSchema),
+    defaultValues: { vendor: '', reference: '', date: '' },
+  })
+
+  const onSubmit = async () => {
+    toast.success('Purchase order created.')
+    reset()
+    onClose()
+  }
+
+  const handleClose = () => { reset(); onClose() }
+
   return (
-    <Modal open={open} onClose={onClose} title="New Purchase Order" size="md">
-      <div className="space-y-4">
-        <div>
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide block mb-1.5">
-            Vendor
-          </label>
-          <select
-            className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 bg-surface-900
-                       border border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            value={form.vendor}
-            onChange={e => setForm(f => ({ ...f, vendor: e.target.value }))}
-          >
-            <option value="">Select vendor…</option>
-            <option>Acme Supplies</option>
-            <option>TechParts Ltd</option>
-            <option>Global Materials</option>
-          </select>
+    <Modal open={open} onClose={handleClose} title="New Purchase Order" size="md">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="space-y-4">
+          <div>
+            <Select label="Vendor" {...register('vendor')}>
+              <option value="">Select vendor…</option>
+              <option>Acme Supplies</option>
+              <option>TechParts Ltd</option>
+              <option>Global Materials</option>
+            </Select>
+            {errors.vendor && <p className="mt-1 text-xs text-red-400">{errors.vendor.message}</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Reference" placeholder="REF-000"
+              error={errors.reference?.message}
+              {...register('reference')} />
+            <Input label="Order Date" type="date"
+              error={errors.date?.message}
+              {...register('date')} />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={isSubmitting}>Create Order</Button>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <Input label="Reference" placeholder="REF-000"
-            value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} />
-          <Input label="Order Date" type="date"
-            value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-        </div>
-        <div className="flex gap-3 pt-2">
-          <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
-          <Button className="flex-1" onClick={() => { alert('Order created (demo)'); onClose() }}>
-            Create Order
-          </Button>
-        </div>
-      </div>
+      </form>
     </Modal>
   )
 }

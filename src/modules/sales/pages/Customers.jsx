@@ -1,6 +1,10 @@
 import { useState } from 'react'
-import { Plus, Search, Mail, Phone, MapPin, TrendingUp } from 'lucide-react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Plus, Search, Mail, Phone, MapPin } from 'lucide-react'
 import { Button, Badge, PageHeader, Card, Modal, Input } from '@shared/components/ui'
+import toast from '@shared/lib/toast'
 
 const MOCK_CUSTOMERS = [
   { id: 1, name: 'Bright Corp', contact: 'Emma Johnson', email: 'emma@brightcorp.com', phone: '+1-555-0201', country: 'USA', industry: 'Technology', orders: 12, totalRevenue: 128000, status: 'active' },
@@ -10,6 +14,14 @@ const MOCK_CUSTOMERS = [
   { id: 5, name: 'Zenith Group', contact: 'Ava Martinez', email: 'ava@zenithgroup.com', phone: '+34-555-0205', country: 'Spain', industry: 'Manufacturing', orders: 14, totalRevenue: 163000, status: 'inactive' },
   { id: 6, name: 'Apex Solutions', contact: 'Ethan Kim', email: 'ethan@apex.com', phone: '+82-555-0206', country: 'South Korea', industry: 'Consulting', orders: 5, totalRevenue: 38000, status: 'active' },
 ]
+
+const customerSchema = z.object({
+  name:    z.string().trim().min(1, 'Company name is required'),
+  contact: z.string().trim().optional(),
+  email:   z.string().email('Enter a valid email').or(z.literal('')),
+  phone:   z.string().trim().optional(),
+  country: z.string().trim().optional(),
+})
 
 function CustomerCard({ customer }) {
   return (
@@ -31,6 +43,50 @@ function CustomerCard({ customer }) {
         <div><p className="text-lg font-display font-bold text-emerald-400">${(customer.totalRevenue / 1000).toFixed(0)}K</p><p className="text-xs text-slate-500">Revenue</p></div>
       </div>
     </Card>
+  )
+}
+
+function NewCustomerModal({ open, onClose }) {
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(customerSchema),
+    defaultValues: { name: '', contact: '', email: '', phone: '', country: '' },
+  })
+
+  const onSubmit = async () => {
+    toast.success('Customer added.')
+    reset()
+    onClose()
+  }
+
+  const handleClose = () => { reset(); onClose() }
+
+  return (
+    <Modal open={open} onClose={handleClose} title="New Customer" size="md">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Input label="Company Name" placeholder="Company name"
+                error={errors.name?.message}
+                {...register('name')} />
+            </div>
+            <Input label="Contact Person" placeholder="Full name"
+              {...register('contact')} />
+            <Input label="Email" type="email" placeholder="email@company.com"
+              error={errors.email?.message}
+              {...register('email')} />
+            <Input label="Phone" placeholder="+1-555-0000"
+              {...register('phone')} />
+            <Input label="Country" placeholder="Country"
+              {...register('country')} />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={isSubmitting}>Add Customer</Button>
+          </div>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
@@ -56,21 +112,7 @@ export default function Customers() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filtered.map(c => <CustomerCard key={c.id} customer={c}/>)}
       </div>
-      <Modal open={showNew} onClose={() => setShowNew(false)} title="New Customer" size="md">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2"><Input label="Company Name" placeholder="Company name"/></div>
-            <Input label="Contact Person" placeholder="Full name"/>
-            <Input label="Email" type="email" placeholder="email@company.com"/>
-            <Input label="Phone" placeholder="+1-555-0000"/>
-            <Input label="Country" placeholder="Country"/>
-          </div>
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button className="flex-1" onClick={() => { alert('Customer created (demo)'); setShowNew(false) }}>Add Customer</Button>
-          </div>
-        </div>
-      </Modal>
+      <NewCustomerModal open={showNew} onClose={() => setShowNew(false)} />
     </div>
   )
 }

@@ -1,6 +1,10 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Plus, Search, Send } from 'lucide-react'
-import { Button, Badge, Table, Thead, Th, Tbody, Tr, Td, PageHeader, Card, Modal, Input } from '@shared/components/ui'
+import { Button, Badge, Table, Thead, Th, Tbody, Tr, Td, PageHeader, Card, Modal, Input, Select } from '@shared/components/ui'
+import toast from '@shared/lib/toast'
 
 const MOCK_QUOTATIONS = [
   { id: 'Q-2024-001', customer: 'Bright Corp', amount: 18500, status: 'sent', date: '2024-01-14', expiry: '2024-01-28', salesperson: 'Alice Wang' },
@@ -16,6 +20,56 @@ const STATUS = {
   accepted: { label: 'Accepted', color: 'green' },
   expired: { label: 'Expired', color: 'red' },
   cancelled: { label: 'Cancelled', color: 'red' },
+}
+
+const quotationSchema = z.object({
+  customer:    z.string().min(1, 'Customer is required'),
+  expiry:      z.string().min(1, 'Expiry date is required'),
+  salesperson: z.string().trim().optional(),
+})
+
+function NewQuotationModal({ open, onClose }) {
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(quotationSchema),
+    defaultValues: { customer: '', expiry: '', salesperson: '' },
+  })
+
+  const onSubmit = async () => {
+    toast.success('Quotation created.')
+    reset()
+    onClose()
+  }
+
+  const handleClose = () => { reset(); onClose() }
+
+  return (
+    <Modal open={open} onClose={handleClose} title="New Quotation" size="md">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="space-y-4">
+          <div>
+            <Select label="Customer" {...register('customer')}>
+              <option value="">Select customer...</option>
+              <option>Bright Corp</option>
+              <option>Nova Retail</option>
+              <option>Summit Tech</option>
+            </Select>
+            {errors.customer && <p className="mt-1 text-xs text-red-400">{errors.customer.message}</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Expiry Date" type="date"
+              error={errors.expiry?.message}
+              {...register('expiry')} />
+            <Input label="Salesperson" placeholder="Name"
+              {...register('salesperson')} />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={isSubmitting}>Create</Button>
+          </div>
+        </div>
+      </form>
+    </Modal>
+  )
 }
 
 export default function Quotations() {
@@ -60,25 +114,7 @@ export default function Quotations() {
           </Tbody>
         </Table>
       </Card>
-      <Modal open={showNew} onClose={() => setShowNew(false)} title="New Quotation" size="md">
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-slate-400 uppercase tracking-wide block mb-1.5">Customer</label>
-            <select className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 bg-surface-900 border border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500">
-              <option value="">Select customer...</option>
-              <option>Bright Corp</option><option>Nova Retail</option><option>Summit Tech</option>
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Expiry Date" type="date"/>
-            <Input label="Salesperson" placeholder="Name"/>
-          </div>
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button className="flex-1" onClick={() => { alert('Quotation created (demo)'); setShowNew(false) }}>Create</Button>
-          </div>
-        </div>
-      </Modal>
+      <NewQuotationModal open={showNew} onClose={() => setShowNew(false)} />
     </div>
   )
 }
