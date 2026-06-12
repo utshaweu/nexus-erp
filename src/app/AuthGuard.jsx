@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@shared/hooks/useAuth'
 import { useTenant } from '@core/tenant/TenantContext'
@@ -10,27 +11,31 @@ import toast from '@shared/lib/toast'
 function LoginPage() {
   const { signIn, signUp } = useAuth()
   const [mode, setMode]     = useState('login')
-  const [email, setEmail]   = useState('superadmin@nexuserp.com')
-  const [password, setPw]   = useState('superadmin')
-  const [name, setName]     = useState('')
   const [showPw, setShowPw] = useState(false)
-  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    try {
-      if (mode === 'login') {
-        const { error } = await signIn(email, password)
-        if (error) toast.error(error.message)
-        else toast.success(`Welcome back, ${email}!`)
-      } else {
-        const { error } = await signUp(email, password, name)
-        if (error) toast.error(error.message)
-        else toast.info(`Confirmation email sent to ${email}. Please check your inbox.`)
-      }
-    } finally {
-      setLoading(false)
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    defaultValues: { email: 'superadmin@nexuserp.com', password: 'superadmin', name: '' },
+  })
+
+  const switchMode = (next) => {
+    setMode(next)
+    reset({ email: '', password: '', name: '' })
+  }
+
+  const onSubmit = async (data) => {
+    if (mode === 'login') {
+      const { error } = await signIn(data.email, data.password)
+      if (error) toast.error(error.message)
+      else toast.success(`Welcome back, ${data.email}!`)
+    } else {
+      const { error } = await signUp(data.email, data.password, data.name)
+      if (error) toast.error(error.message)
+      else toast.info(`Confirmation email sent to ${data.email}. Please check your inbox.`)
     }
   }
 
@@ -65,27 +70,33 @@ function LoginPage() {
             {mode === 'login' ? 'Sign in to your account' : 'Create an account'}
           </h2>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
             {mode === 'register' && (
               <Input
                 label="Full Name"
-                value={name}
-                onChange={e => setName(e.target.value)}
                 placeholder="John Smith"
-                required
+                error={errors.name?.message}
+                {...register('name', {
+                  validate: v => mode === 'login' || (v?.trim().length > 0) || 'Name is required',
+                })}
               />
             )}
 
             <Input
               label="Email"
               type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
               placeholder="you@company.com"
-              required
+              error={errors.email?.message}
+              {...register('email', {
+                required: 'Email is required',
+                pattern: {
+                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  message: 'Enter a valid email address',
+                },
+              })}
             />
 
-            {/* Password with show/hide */}
+            {/* Password with show/hide toggle */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                 Password
@@ -93,10 +104,7 @@ function LoginPage() {
               <div className="relative">
                 <input
                   type={showPw ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPw(e.target.value)}
                   placeholder="••••••••"
-                  required
                   className="w-full px-3 py-2 pr-10 rounded-lg text-sm
                              text-slate-800 placeholder:text-slate-400
                              bg-white border border-slate-300
@@ -105,6 +113,10 @@ function LoginPage() {
                              dark:text-slate-200 dark:placeholder:text-slate-600
                              dark:bg-surface-900 dark:border-surface-700
                              dark:hover:border-surface-600"
+                  {...register('password', {
+                    required: 'Password is required',
+                    minLength: { value: 6, message: 'At least 6 characters required' },
+                  })}
                 />
                 <button
                   type="button"
@@ -116,16 +128,19 @@ function LoginPage() {
                   {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
+              {errors.password && (
+                <p className="text-xs text-red-500">{errors.password.message}</p>
+              )}
             </div>
 
-            <Button type="submit" loading={loading} className="w-full mt-2">
+            <Button type="submit" loading={isSubmitting} className="w-full mt-2">
               {mode === 'login' ? 'Sign In' : 'Create Account'}
             </Button>
           </form>
 
           <div className="mt-4 pt-4 border-t border-slate-200 dark:border-surface-800 text-center">
             <button
-              onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}
+              onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
               className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
             >
               {mode === 'login'

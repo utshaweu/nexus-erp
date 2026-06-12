@@ -1,10 +1,14 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Plus, Search, Download, Eye } from 'lucide-react'
 import {
   Button, Badge, Table, Thead, Th, Tbody, Tr, Td,
-  PageHeader, Card, Modal, Input,
+  PageHeader, Card, Modal, Input, Select,
 } from '@shared/components/ui'
 import PermissionGate from '@shared/components/PermissionGate'
+import toast from '@shared/lib/toast'
 
 const MOCK_ORDERS = [
   { id:'SO-2024-001', customer:'Bright Corp', amount:18500, status:'confirmed', date:'2024-01-15', salesperson:'Alice Wang' },
@@ -20,6 +24,56 @@ const STATUS = {
   invoiced:  { label:'Invoiced',  color:'purple'   },
   done:      { label:'Done',      color:'green'    },
   cancelled: { label:'Cancelled', color:'red'      },
+}
+
+const orderSchema = z.object({
+  customer:   z.string().min(1, 'Customer is required'),
+  date:       z.string().min(1, 'Order date is required'),
+  salesperson: z.string().trim().optional(),
+})
+
+function NewSalesOrderModal({ open, onClose }) {
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    resolver: zodResolver(orderSchema),
+    defaultValues: { customer: '', date: '', salesperson: '' },
+  })
+
+  const onSubmit = async () => {
+    toast.success('Sales order created.')
+    reset()
+    onClose()
+  }
+
+  const handleClose = () => { reset(); onClose() }
+
+  return (
+    <Modal open={open} onClose={handleClose} title="New Sales Order" size="md">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="space-y-4">
+          <div>
+            <Select label="Customer" {...register('customer')}>
+              <option value="">Select customer…</option>
+              <option>Bright Corp</option>
+              <option>Nova Retail</option>
+              <option>Summit Tech</option>
+            </Select>
+            {errors.customer && <p className="mt-1 text-xs text-red-400">{errors.customer.message}</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Order Date" type="date"
+              error={errors.date?.message}
+              {...register('date')} />
+            <Input label="Salesperson" placeholder="Name"
+              {...register('salesperson')} />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={isSubmitting}>Create</Button>
+          </div>
+        </div>
+      </form>
+    </Modal>
+  )
 }
 
 export default function SalesOrders() {
@@ -124,30 +178,7 @@ export default function SalesOrders() {
         </Table>
       </Card>
 
-      <Modal open={showNew} onClose={() => setShowNew(false)} title="New Sales Order" size="md">
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-slate-400 uppercase tracking-wide block mb-1.5">
-              Customer
-            </label>
-            <select className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 bg-surface-900
-                               border border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500">
-              <option value="">Select customer…</option>
-              <option>Bright Corp</option><option>Nova Retail</option><option>Summit Tech</option>
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Order Date" type="date" />
-            <Input label="Salesperson" placeholder="Name" />
-          </div>
-          <div className="flex gap-3 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button className="flex-1" onClick={() => { alert('Order created (demo)'); setShowNew(false) }}>
-              Create
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <NewSalesOrderModal open={showNew} onClose={() => setShowNew(false)} />
     </div>
   )
 }
