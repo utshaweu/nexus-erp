@@ -1,5 +1,6 @@
 import { clsx } from 'clsx'
-import { forwardRef } from 'react'
+import { forwardRef, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Loader2, X } from 'lucide-react'
 
 // ─── Button ────────────────────────────────────────────────────────────────
@@ -278,28 +279,55 @@ export function PageHeader({ title, subtitle, actions, breadcrumb }) {
 }
 
 // ─── Modal ─────────────────────────────────────────────────────────────────
+const MODAL_SIZES = {
+  sm: 'max-w-md',
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+}
+
 export function Modal({ open, onClose, title, children, size = 'md' }) {
-  if (!open) return null
+  const [mounted, setMounted] = useState(false)
+  const [visible, setVisible] = useState(false)
 
-  const sizes = {
-    sm: 'max-w-md',
-    md: 'max-w-lg',
-    lg: 'max-w-2xl',
-    xl: 'max-w-4xl',
-  }
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      // One frame delay so CSS transition picks up the initial state
+      const t = setTimeout(() => setVisible(true), 10)
+      return () => clearTimeout(t)
+    } else {
+      setVisible(false)
+      // Keep mounted until exit animation finishes
+      const t = setTimeout(() => setMounted(false), 200)
+      return () => clearTimeout(t)
+    }
+  }, [open])
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  if (!mounted) return null
+
+  return createPortal(
+    <div
+      className={clsx(
+        'fixed inset-0 z-[9999] flex items-center justify-center p-4',
+        'bg-black/50',
+        'transition-opacity duration-200',
+        visible ? 'opacity-100' : 'opacity-0 pointer-events-none',
+      )}
+      onClick={onClose}
+    >
+      {/* Panel */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <div className={clsx(
-        'relative w-full rounded-2xl shadow-2xl',
-        'bg-white dark:bg-surface-900',
-        'border border-surface-200 dark:border-surface-800',
-        sizes[size]
-      )}>
+        onClick={e => e.stopPropagation()}
+        className={clsx(
+          'relative w-full rounded-2xl shadow-xl',
+          'bg-white dark:bg-surface-900',
+          'border border-surface-200 dark:border-surface-800',
+          'transition-all duration-200',
+          MODAL_SIZES[size],
+          visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2',
+        )}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-200 dark:border-surface-800">
           <h2 className="font-display font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
           <button
@@ -314,6 +342,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }) {
         </div>
         <div className="p-6">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
