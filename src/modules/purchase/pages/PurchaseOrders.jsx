@@ -13,18 +13,11 @@ import Pagination from '@shared/components/Pagination'
 import toast from '@shared/lib/toast'
 import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
-
-const PAGE_SIZE = 10
-
-const STATUS = {
-  draft:     { label: 'Draft',     color: 'default' },
-  pending:   { label: 'Pending',   color: 'yellow'  },
-  approved:  { label: 'Approved',  color: 'green'   },
-  received:  { label: 'Received',  color: 'blue'    },
-  cancelled: { label: 'Cancelled', color: 'red'     },
-}
-
-const STATUS_TABS = ['all', 'draft', 'pending', 'approved', 'received', 'cancelled']
+import {
+  PAGE_SIZE_TABLE as PAGE_SIZE,
+  PURCHASE_ORDER_STATUS as STATUS,
+  PURCHASE_ORDER_STATUS_TABS as STATUS_TABS,
+} from '@shared/lib/constants'
 
 const orderSchema = z.object({
   vendor_id:     z.string().min(1, 'Vendor is required'),

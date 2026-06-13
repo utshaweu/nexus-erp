@@ -9,14 +9,7 @@ import PermissionGate from '@shared/components/PermissionGate'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
-
-const STATUS = {
-  draft:     { label: 'Draft',     color: 'default' },
-  pending:   { label: 'Pending',   color: 'yellow'  },
-  approved:  { label: 'Approved',  color: 'green'   },
-  received:  { label: 'Received',  color: 'blue'    },
-  cancelled: { label: 'Cancelled', color: 'red'     },
-}
+import { PURCHASE_ORDER_STATUS as STATUS } from '@shared/lib/constants'
 
 function buildMonthBuckets() {
   const now = new Date()

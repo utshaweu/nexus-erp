@@ -11,8 +11,13 @@ import Pagination from '@shared/components/Pagination'
 import toast from '@shared/lib/toast'
 import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
-
-const PAGE_SIZE = 12
+import {
+  PAGE_SIZE_GRID as PAGE_SIZE,
+  COUNTRIES,
+  VENDOR_CATEGORIES as CATEGORIES,
+  VENDOR_STATUS_TABS as STATUS_TABS,
+  VENDOR_STATUS_LABEL as STATUS_LABEL,
+} from '@shared/lib/constants'
 
 const vendorSchema = z.object({
   name:         z.string().trim().min(1, 'Company name is required'),
@@ -24,25 +29,6 @@ const vendorSchema = z.object({
   category:     z.string().min(1, 'Category is required'),
   status:       z.enum(['active', 'inactive', 'blacklisted']),
 })
-
-const CATEGORIES = ['General', 'Technology', 'Raw Materials', 'Logistics', 'Services']
-
-const COUNTRIES = [
-  'Afghanistan','Albania','Algeria','Argentina','Australia','Austria','Azerbaijan',
-  'Bangladesh','Belgium','Bolivia','Brazil','Cambodia','Canada','Chile','China',
-  'Colombia','Croatia','Czech Republic','Denmark','Ecuador','Egypt','Ethiopia',
-  'Finland','France','Georgia','Germany','Ghana','Greece','Hungary','India',
-  'Indonesia','Iran','Iraq','Ireland','Israel','Italy','Japan','Jordan','Kazakhstan',
-  'Kenya','Kuwait','Malaysia','Mexico','Morocco','Myanmar','Nepal','Netherlands',
-  'New Zealand','Nigeria','Norway','Oman','Pakistan','Peru','Philippines','Poland',
-  'Portugal','Qatar','Romania','Russia','Saudi Arabia','Serbia','Singapore',
-  'South Africa','South Korea','Spain','Sri Lanka','Sweden','Switzerland','Taiwan',
-  'Tanzania','Thailand','Tunisia','Turkey','Uganda','Ukraine',
-  'United Arab Emirates','United Kingdom','United States','Uzbekistan',
-  'Venezuela','Vietnam','Yemen',
-]
-const STATUS_TABS  = ['all', 'active', 'inactive', 'blacklisted']
-const STATUS_LABEL = { all: 'All', active: 'Active', inactive: 'Inactive', blacklisted: 'Blacklisted' }
 
 // ── Stars ───────────────────────────────────────────────────────────────────
 

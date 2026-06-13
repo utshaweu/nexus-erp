@@ -12,18 +12,11 @@ import Pagination from '@shared/components/Pagination'
 import toast from '@shared/lib/toast'
 import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
-
-const PAGE_SIZE = 10
-
-const STATUS = {
-  draft:     { label: 'Draft',           color: 'default' },
-  sent:      { label: 'Sent',            color: 'blue'    },
-  received:  { label: 'Received',        color: 'green'   },
-  expired:   { label: 'Expired',         color: 'red'     },
-  converted: { label: 'Converted to PO', color: 'purple'  },
-}
-
-const STATUS_TABS = ['all', 'draft', 'sent', 'received', 'expired', 'converted']
+import {
+  PAGE_SIZE_TABLE as PAGE_SIZE,
+  RFQ_STATUS as STATUS,
+  RFQ_STATUS_TABS as STATUS_TABS,
+} from '@shared/lib/constants'
 
 const rfqSchema = z.object({
   vendor_id: z.string().min(1, 'Vendor is required'),

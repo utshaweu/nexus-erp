@@ -9,14 +9,7 @@ import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import toast from '@shared/lib/toast'
 import PermissionGate from '@shared/components/PermissionGate'
-
-const STATUS_BADGE = {
-  draft:     { label: 'Draft',     color: 'default' },
-  pending:   { label: 'Pending',   color: 'yellow'  },
-  approved:  { label: 'Approved',  color: 'green'   },
-  received:  { label: 'Received',  color: 'blue'    },
-  cancelled: { label: 'Cancelled', color: 'red'     },
-}
+import { PURCHASE_ORDER_STATUS as STATUS_BADGE } from '@shared/lib/constants'
 
 export default function PurchaseOrderDetail() {
   const { id }       = useParams()
