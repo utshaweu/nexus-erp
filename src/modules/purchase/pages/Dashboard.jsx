@@ -1,36 +1,105 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ShoppingCart, TrendingUp, Clock, CheckCircle, Plus } from 'lucide-react'
 import {
   StatCard, Card, CardHeader, CardTitle, CardContent,
-  Badge, Table, Thead, Th, Tbody, Tr, Td, Button, PageHeader,
+  Badge, Table, Thead, Th, Tbody, Tr, Td, Button, PageHeader, Spinner,
 } from '@shared/components/ui'
 import PermissionGate from '@shared/components/PermissionGate'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-
-const MOCK_STATS = { total: 48, pending: 12, approved: 31, totalSpend: 284500 }
-
-const MOCK_ORDERS = [
-  { id: 'PO-2024-001', vendor: 'Acme Supplies',    amount: 12500, status: 'approved', date: '2024-01-15' },
-  { id: 'PO-2024-002', vendor: 'TechParts Ltd',    amount:  8900, status: 'pending',  date: '2024-01-16' },
-  { id: 'PO-2024-003', vendor: 'Global Materials', amount: 34200, status: 'draft',    date: '2024-01-17' },
-  { id: 'PO-2024-004', vendor: 'FastShip Co',      amount:  6750, status: 'received', date: '2024-01-18' },
-]
-
-const CHART = [
-  { month: 'Aug', spend: 42000 }, { month: 'Sep', spend: 58000 },
-  { month: 'Oct', spend: 51000 }, { month: 'Nov', spend: 67000 },
-  { month: 'Dec', spend: 72000 }, { month: 'Jan', spend: 84500 },
-]
+import { supabase } from '@shared/api/supabase'
+import { useTenant } from '@core/tenant/TenantContext'
 
 const STATUS = {
-  draft:     { label: 'Draft',    color: 'default' },
-  pending:   { label: 'Pending',  color: 'yellow'  },
-  approved:  { label: 'Approved', color: 'green'   },
-  received:  { label: 'Received', color: 'blue'    },
-  cancelled: { label: 'Cancelled',color: 'red'     },
+  draft:     { label: 'Draft',     color: 'default' },
+  pending:   { label: 'Pending',   color: 'yellow'  },
+  approved:  { label: 'Approved',  color: 'green'   },
+  received:  { label: 'Received',  color: 'blue'    },
+  cancelled: { label: 'Cancelled', color: 'red'     },
+}
+
+function buildMonthBuckets() {
+  const now = new Date()
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+    return {
+      month: d.toLocaleString('default', { month: 'short' }),
+      year:  d.getFullYear(),
+      m:     d.getMonth() + 1,
+      spend: 0,
+    }
+  })
 }
 
 export default function PurchaseDashboard() {
+  const { tenantId } = useTenant()
+  const [stats,   setStats]   = useState({ total: 0, pending: 0, approved: 0, totalSpend: 0 })
+  const [orders,  setOrders]  = useState([])
+  const [chart,   setChart]   = useState(buildMonthBuckets().map(({ month }) => ({ month, spend: 0 })))
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!tenantId) return
+    load()
+  }, [tenantId])
+
+  async function load() {
+    setLoading(true)
+    try {
+      const sixMonthsAgo = new Date()
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
+      sixMonthsAgo.setDate(1)
+      const cutoff = sixMonthsAgo.toISOString().split('T')[0]
+
+      const [allRes, recentRes, chartRes] = await Promise.all([
+        supabase
+          .from('purchase_orders')
+          .select('status, total_amount')
+          .eq('tenant_id', tenantId),
+        supabase
+          .from('purchase_orders')
+          .select('id, order_number, status, order_date, total_amount, vendor:vendors(name)')
+          .eq('tenant_id', tenantId)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('purchase_orders')
+          .select('order_date, total_amount')
+          .eq('tenant_id', tenantId)
+          .gte('order_date', cutoff),
+      ])
+
+      const all = allRes.data || []
+      setStats({
+        total:      all.length,
+        pending:    all.filter(o => o.status === 'pending').length,
+        approved:   all.filter(o => o.status === 'approved').length,
+        totalSpend: all.reduce((s, o) => s + (Number(o.total_amount) || 0), 0),
+      })
+
+      setOrders(recentRes.data || [])
+
+      const buckets = buildMonthBuckets()
+      ;(chartRes.data || []).forEach(o => {
+        if (!o.order_date) return
+        const d = new Date(o.order_date)
+        const idx = buckets.findIndex(b => b.m === d.getMonth() + 1 && b.year === d.getFullYear())
+        if (idx >= 0) buckets[idx].spend += Number(o.total_amount) || 0
+      })
+      setChart(buckets.map(({ month, spend }) => ({ month, spend })))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spinner className="w-6 h-6" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -38,7 +107,6 @@ export default function PurchaseDashboard() {
         subtitle="Manage procurement and vendor relationships"
         breadcrumb="Operations / Purchase"
         actions={
-          // Only users with CREATE permission on purchase see this button
           <PermissionGate action="create" moduleId="purchase">
             <Link to="/purchase/orders">
               <Button size="sm">
@@ -51,23 +119,22 @@ export default function PurchaseDashboard() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Orders"    value={MOCK_STATS.total}    icon={ShoppingCart} color="#f59e0b" />
-        <StatCard label="Pending Approval" value={MOCK_STATS.pending}  icon={Clock}       color="#f97316" />
-        <StatCard label="Approved"        value={MOCK_STATS.approved}  icon={CheckCircle} color="#10b981" />
+        <StatCard label="Total Orders"     value={stats.total}    icon={ShoppingCart} color="#f59e0b" />
+        <StatCard label="Pending Approval" value={stats.pending}  icon={Clock}        color="#f97316" />
+        <StatCard label="Approved"         value={stats.approved} icon={CheckCircle}  color="#10b981" />
         <StatCard
           label="Total Spend"
-          value={`$${(MOCK_STATS.totalSpend / 1000).toFixed(0)}K`}
-          change={8.2}
+          value={`$${(stats.totalSpend / 1000).toFixed(0)}K`}
           icon={TrendingUp}
           color="#6366f1"
         />
       </div>
 
-      <Card className="lg:col-span-2">
+      <Card>
         <CardHeader><CardTitle>Monthly Spend Trend</CardTitle></CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={CHART}>
+            <AreaChart data={chart}>
               <defs>
                 <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%"  stopColor="#f59e0b" stopOpacity={0.3} />
@@ -75,12 +142,14 @@ export default function PurchaseDashboard() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="month" tick={{ fill:'#64748b', fontSize:11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill:'#64748b', fontSize:11 }} axisLine={false} tickLine={false}
-                tickFormatter={v => `$${v/1000}K`} />
+              <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis
+                tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false}
+                tickFormatter={v => `$${v / 1000}K`}
+              />
               <Tooltip
-                contentStyle={{ background:'#1e293b', border:'1px solid #334155', borderRadius:8, fontSize:12 }}
-                formatter={v => [`$${v.toLocaleString()}`, 'Spend']}
+                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, fontSize: 12 }}
+                formatter={v => [`$${Number(v).toLocaleString()}`, 'Spend']}
               />
               <Area type="monotone" dataKey="spend" stroke="#f59e0b" strokeWidth={2} fill="url(#spendGrad)" />
             </AreaChart>
@@ -98,42 +167,35 @@ export default function PurchaseDashboard() {
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <Table>
-            <Thead>
-              <Th>Order #</Th><Th>Vendor</Th><Th>Date</Th><Th>Amount</Th><Th>Status</Th>
-              {/* Actions column only shown if user can edit OR approve */}
-              <PermissionGate action="edit" moduleId="purchase">
-                <Th>Actions</Th>
-              </PermissionGate>
-            </Thead>
-            <Tbody>
-              {MOCK_ORDERS.map(order => {
-                const s = STATUS[order.status]
-                return (
-                  <Tr key={order.id}>
-                    <Td><span className="font-mono text-xs text-brand-400">{order.id}</span></Td>
-                    <Td>{order.vendor}</Td>
-                    <Td><span className="text-slate-500">{order.date}</span></Td>
-                    <Td><span className="font-semibold">${order.amount.toLocaleString()}</span></Td>
-                    <Td><Badge color={s.color}>{s.label}</Badge></Td>
-                    <PermissionGate action="edit" moduleId="purchase">
+          {orders.length === 0 ? (
+            <div className="py-8 text-center text-slate-500 text-sm">No purchase orders yet.</div>
+          ) : (
+            <Table>
+              <Thead>
+                <Th>Order #</Th><Th>Vendor</Th><Th>Date</Th><Th>Amount</Th><Th>Status</Th>
+              </Thead>
+              <Tbody>
+                {orders.map(order => {
+                  const s = STATUS[order.status] || STATUS.draft
+                  return (
+                    <Tr key={order.id}>
                       <Td>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="xs">Edit</Button>
-                          <PermissionGate action="approve" moduleId="purchase">
-                            <Button variant="ghost" size="xs">Approve</Button>
-                          </PermissionGate>
-                          <PermissionGate action="delete" moduleId="purchase">
-                            <Button variant="danger" size="xs">Delete</Button>
-                          </PermissionGate>
-                        </div>
+                        <Link to={`/purchase/orders/${order.id}`}>
+                          <span className="font-mono text-xs text-brand-400 hover:text-brand-300">
+                            {order.order_number}
+                          </span>
+                        </Link>
                       </Td>
-                    </PermissionGate>
-                  </Tr>
-                )
-              })}
-            </Tbody>
-          </Table>
+                      <Td>{order.vendor?.name || '—'}</Td>
+                      <Td><span className="text-slate-500">{order.order_date}</span></Td>
+                      <Td><span className="font-semibold">${(Number(order.total_amount) || 0).toLocaleString()}</span></Td>
+                      <Td><Badge color={s.color}>{s.label}</Badge></Td>
+                    </Tr>
+                  )
+                })}
+              </Tbody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
