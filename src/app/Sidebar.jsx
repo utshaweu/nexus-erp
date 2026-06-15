@@ -165,8 +165,8 @@ export default function Sidebar() {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
 
-        {/* Logo + tenant */}
-        <div className="flex items-center gap-3 px-4 py-4 border-b border-surface-200 dark:border-surface-800">
+        {/* Logo + tenant — h-14 matches TopBar height so the dividers align */}
+        <div className="h-14 flex items-center gap-3 px-4 border-b border-surface-200 dark:border-surface-800 flex-shrink-0">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700
                           flex items-center justify-center flex-shrink-0">
             <span className="text-white font-display font-bold text-sm">N</span>
