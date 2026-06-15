@@ -69,3 +69,28 @@ export const QUOTATION_STATUS = {
   cancelled: { label: 'Cancelled', color: 'red'     },
 }
 export const QUOTATION_STATUS_TABS = ['all', 'draft', 'sent', 'accepted', 'expired', 'cancelled']
+
+// ── Inventory — Products ──────────────────────────────────────────────────────
+export const PRODUCT_CATEGORIES = [
+  'Electronics', 'Furniture', 'Supplies', 'Parts', 'Tools',
+  'Raw Materials', 'Finished Goods', 'Other',
+]
+export const PRODUCT_UNITS = [
+  'unit', 'piece', 'pair', 'set', 'box', 'carton',
+  'kg', 'g', 'litre', 'ml', 'm', 'cm',
+]
+export const PRODUCT_STATUS = {
+  active:   { label: 'Active',   color: 'green'   },
+  inactive: { label: 'Inactive', color: 'yellow'  },
+  archived: { label: 'Archived', color: 'default' },
+}
+export const PRODUCT_STATUS_TABS = ['all', 'active', 'inactive', 'archived']
+
+// ── Inventory — Stock Moves ───────────────────────────────────────────────────
+export const STOCK_MOVE_TYPES = {
+  incoming:   { label: 'Incoming',          color: 'green'  },
+  outgoing:   { label: 'Outgoing',          color: 'red'    },
+  internal:   { label: 'Internal Transfer', color: 'blue'   },
+  adjustment: { label: 'Adjustment',        color: 'purple' },
+}
+export const STOCK_MOVE_TYPE_TABS = ['all', 'incoming', 'outgoing', 'internal', 'adjustment']
