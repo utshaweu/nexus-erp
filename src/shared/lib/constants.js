@@ -94,3 +94,40 @@ export const STOCK_MOVE_TYPES = {
   adjustment: { label: 'Adjustment',        color: 'purple' },
 }
 export const STOCK_MOVE_TYPE_TABS = ['all', 'incoming', 'outgoing', 'internal', 'adjustment']
+
+// ── Accounts — Invoice ────────────────────────────────────────────────────────
+export const INVOICE_STATUS = {
+  draft:     { label: 'Draft',     color: 'default' },
+  sent:      { label: 'Sent',      color: 'blue'    },
+  paid:      { label: 'Paid',      color: 'green'   },
+  overdue:   { label: 'Overdue',   color: 'red'     },
+  cancelled: { label: 'Cancelled', color: 'default' },
+}
+export const INVOICE_STATUS_TABS = ['all', 'draft', 'sent', 'paid', 'overdue', 'cancelled']
+
+// ── Accounts — Bill ───────────────────────────────────────────────────────────
+export const BILL_STATUS = {
+  draft:     { label: 'Draft',     color: 'default' },
+  posted:    { label: 'Posted',    color: 'blue'    },
+  paid:      { label: 'Paid',      color: 'green'   },
+  cancelled: { label: 'Cancelled', color: 'red'     },
+}
+export const BILL_STATUS_TABS = ['all', 'draft', 'posted', 'paid', 'cancelled']
+
+// ── Accounts — Journal Entry ──────────────────────────────────────────────────
+export const JOURNAL_STATUS = {
+  draft:     { label: 'Draft',     color: 'default' },
+  posted:    { label: 'Posted',    color: 'green'   },
+  cancelled: { label: 'Cancelled', color: 'red'     },
+}
+export const JOURNAL_STATUS_TABS = ['all', 'draft', 'posted', 'cancelled']
+
+// ── Accounts — Chart of Accounts ─────────────────────────────────────────────
+export const ACCOUNT_TYPES = {
+  asset:     { label: 'Asset',     color: 'blue'    },
+  liability: { label: 'Liability', color: 'red'     },
+  equity:    { label: 'Equity',    color: 'purple'  },
+  revenue:   { label: 'Revenue',   color: 'green'   },
+  expense:   { label: 'Expense',   color: 'orange'  },
+}
+export const ACCOUNT_TYPE_TABS = ['all', 'asset', 'liability', 'equity', 'revenue', 'expense']
