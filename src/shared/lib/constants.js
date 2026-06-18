@@ -73,8 +73,10 @@ export const QUOTATION_STATUS_TABS = ['all', 'draft', 'sent', 'accepted', 'expir
 // ── Inventory — Products ──────────────────────────────────────────────────────
 export const PRODUCT_CATEGORIES = [
   'Electronics', 'Furniture', 'Supplies', 'Parts', 'Tools',
-  'Raw Materials', 'Finished Goods', 'Other',
+  'Raw Materials', 'Finished Goods', 'Assets', 'Other',
 ]
+// Products in this category are selectable as fixed-asset names in the Assets module
+export const ASSET_PRODUCT_CATEGORY = 'Assets'
 export const PRODUCT_UNITS = [
   'unit', 'piece', 'pair', 'set', 'box', 'carton',
   'kg', 'g', 'litre', 'ml', 'm', 'cm',
@@ -131,3 +133,41 @@ export const ACCOUNT_TYPES = {
   expense:   { label: 'Expense',   color: 'orange'  },
 }
 export const ACCOUNT_TYPE_TABS = ['all', 'asset', 'liability', 'equity', 'revenue', 'expense']
+
+// ── Assets — Asset Registry ───────────────────────────────────────────────────
+export const ASSET_STATUS = {
+  active:            { label: 'Active',          color: 'green'   },
+  maintenance:       { label: 'Maintenance',     color: 'yellow'  },
+  disposed:          { label: 'Disposed',        color: 'red'     },
+  fully_depreciated: { label: 'Fully Depr.',     color: 'default' },
+}
+export const ASSET_STATUS_TABS = ['all', 'active', 'maintenance', 'disposed', 'fully_depreciated']
+
+export const DEPRECIATION_METHODS = {
+  straight_line:     { label: 'Straight Line'     },
+  declining_balance: { label: 'Declining Balance' },
+}
+
+// ── Assets — Depreciation Schedule ───────────────────────────────────────────
+export const ASSET_DEPR_STATUS = {
+  scheduled: { label: 'Scheduled', color: 'default' },
+  posted:    { label: 'Posted',    color: 'green'   },
+  cancelled: { label: 'Cancelled', color: 'red'     },
+}
+export const ASSET_DEPR_STATUS_TABS = ['all', 'scheduled', 'posted', 'cancelled']
+
+// ── Assets — Maintenance Logs ─────────────────────────────────────────────────
+export const MAINTENANCE_TYPE = {
+  preventive:  { label: 'Preventive',  color: 'blue'   },
+  corrective:  { label: 'Corrective',  color: 'orange' },
+  emergency:   { label: 'Emergency',   color: 'red'    },
+  inspection:  { label: 'Inspection',  color: 'purple' },
+}
+
+export const MAINTENANCE_STATUS = {
+  scheduled:   { label: 'Scheduled',   color: 'default' },
+  in_progress: { label: 'In Progress', color: 'yellow'  },
+  completed:   { label: 'Completed',   color: 'green'   },
+  cancelled:   { label: 'Cancelled',   color: 'red'     },
+}
+export const MAINTENANCE_STATUS_TABS = ['all', 'scheduled', 'in_progress', 'completed', 'cancelled']
