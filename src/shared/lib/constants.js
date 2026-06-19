@@ -171,3 +171,63 @@ export const MAINTENANCE_STATUS = {
   cancelled:   { label: 'Cancelled',   color: 'red'     },
 }
 export const MAINTENANCE_STATUS_TABS = ['all', 'scheduled', 'in_progress', 'completed', 'cancelled']
+
+// ── HR — Employee ─────────────────────────────────────────────────────────────
+export const EMPLOYEE_STATUS = {
+  active:     { label: 'Active',     color: 'green'   },
+  inactive:   { label: 'Inactive',   color: 'default' },
+  on_leave:   { label: 'On Leave',   color: 'yellow'  },
+  terminated: { label: 'Terminated', color: 'red'     },
+}
+export const EMPLOYEE_STATUS_TABS = ['all', 'active', 'inactive', 'on_leave', 'terminated']
+
+export const EMPLOYMENT_TYPES = {
+  full_time: 'Full Time',
+  part_time: 'Part Time',
+  contract:  'Contract',
+  intern:    'Intern',
+}
+
+export const GENDER_OPTIONS = {
+  male:              'Male',
+  female:            'Female',
+  other:             'Other',
+  prefer_not_to_say: 'Prefer not to say',
+}
+
+// ── HR — Leave ────────────────────────────────────────────────────────────────
+export const LEAVE_REQUEST_STATUS = {
+  pending:   { label: 'Pending',   color: 'yellow'  },
+  approved:  { label: 'Approved',  color: 'green'   },
+  rejected:  { label: 'Rejected',  color: 'red'     },
+  cancelled: { label: 'Cancelled', color: 'default' },
+}
+export const LEAVE_REQUEST_STATUS_TABS = ['all', 'pending', 'approved', 'rejected', 'cancelled']
+
+// ── HR — Movement ─────────────────────────────────────────────────────────────
+export const MOVEMENT_TYPES = [
+  'Field Visit',
+  'Client Meeting',
+  'Work From Home',
+  'Official Tour',
+  'Training & Development',
+  'Medical / Health',
+  'Other',
+]
+
+export const MOVEMENT_STATUS = {
+  pending:   { label: 'Pending',   color: 'yellow'  },
+  approved:  { label: 'Approved',  color: 'green'   },
+  rejected:  { label: 'Rejected',  color: 'red'     },
+  cancelled: { label: 'Cancelled', color: 'default' },
+}
+export const MOVEMENT_STATUS_TABS = ['all', 'pending', 'approved', 'rejected', 'cancelled']
+
+// ── HR — Payroll ──────────────────────────────────────────────────────────────
+export const PAYROLL_RUN_STATUS = {
+  draft:    { label: 'Draft',    color: 'default' },
+  approved: { label: 'Approved', color: 'green'   },
+  paid:     { label: 'Paid',     color: 'blue'    },
+  cancelled:{ label: 'Cancelled',color: 'red'     },
+}
+export const PAYROLL_RUN_STATUS_TABS = ['all', 'draft', 'approved', 'paid', 'cancelled']
