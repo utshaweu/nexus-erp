@@ -231,3 +231,26 @@ export const PAYROLL_RUN_STATUS = {
   cancelled:{ label: 'Cancelled',color: 'red'     },
 }
 export const PAYROLL_RUN_STATUS_TABS = ['all', 'draft', 'approved', 'paid', 'cancelled']
+
+// ── Offers & Discounts ─────────────────────────────────────────────────────────
+export const OFFER_TYPES = {
+  percentage:   { label: 'Percentage',   color: 'green' },
+  fixed_amount: { label: 'Fixed Amount', color: 'blue'  },
+  buy_x_get_y:  { label: 'Buy X Get Y', color: 'purple' },
+}
+export const OFFER_TYPE_TABS = ['all', 'percentage', 'fixed_amount', 'buy_x_get_y']
+
+export const OFFER_APPLIES_TO_LABELS = {
+  all:      'All Products',
+  product:  'Specific Product',
+  category: 'Category',
+  customer: 'Customer Group',
+}
+
+export const OFFER_STATUS = {
+  active:   { label: 'Active',   color: 'green'  },
+  inactive: { label: 'Inactive', color: 'default' },
+  expired:  { label: 'Expired',  color: 'red'    },
+  upcoming: { label: 'Upcoming', color: 'yellow' },
+}
+export const OFFER_STATUS_TABS = ['all', 'active', 'inactive', 'expired']

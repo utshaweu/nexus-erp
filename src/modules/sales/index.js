@@ -12,7 +12,8 @@ const salesModule = {
   features: [
     'Quotations & Sales Orders',
     'Customer Management',
-    'Pricelist Management',
+    'Offers & Discount Rules',
+    'Coupon Code Management',
     'Sales Pipeline',
     'Revenue Analytics',
   ],
@@ -38,6 +39,11 @@ const salesModule = {
       icon: 'Users', order: 4,
       requiredPermission: { action: 'view', moduleId: 'sales' },
     },
+    {
+      id: 'sales-offers', label: 'Offers & Discounts', path: '/sales/offers',
+      icon: 'Tag', order: 5,
+      requiredPermission: { action: 'view', moduleId: 'sales' },
+    },
   ],
 
   routes: [
@@ -46,6 +52,7 @@ const salesModule = {
     { path: '/sales/orders/:id',component: () => import('./pages/SalesOrderDetail') },
     { path: '/sales/quotations',component: () => import('./pages/Quotations') },
     { path: '/sales/customers', component: () => import('./pages/Customers') },
+    { path: '/sales/offers',    component: () => import('./pages/OffersDiscounts') },
   ],
 
   storeSlice: (set) => ({
