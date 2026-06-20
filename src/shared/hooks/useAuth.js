@@ -52,6 +52,10 @@ export function AuthProvider({ children }) {
     setSession(session)
     window.__erp_user__ = user
 
+    // Load the global module catalogue metadata (DB-driven manifests).
+    // Safe no-op if the table is missing — code manifests are the fallback.
+    await registry.loadCatalog()
+
     if (user.isSuperAdmin) {
       // Super admins have no tenant row — clear any stale tenant state from a
       // previous non-admin session so AuthGuard doesn't show NoTenantScreen.

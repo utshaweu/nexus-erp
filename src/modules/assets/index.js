@@ -1,30 +1,13 @@
-import { Cpu } from 'lucide-react'
-
+/**
+ * Assets module manifest (code side).
+ *
+ * Display metadata (incl. its `accounts` dependency) lives in the
+ * `module_catalog` DB table and is merged in by the ModuleRegistry at login.
+ * This file only owns the non-serialisable parts: id, routes, store slice,
+ * and install/uninstall hooks.
+ */
 const assetsModule = {
   id: 'assets',
-  name: 'Assets',
-  description: 'Track and manage fixed assets, depreciation schedules, maintenance, and disposal.',
-  version: '1.0.0',
-  icon: Cpu,
-  color: '#f97316',
-  category: 'Finance',
-  dependencies: ['accounts'],
-  features: [
-    'Asset Registry',
-    'Depreciation Schedules',
-    'Asset Categories',
-    'Maintenance Tracking',
-    'Asset Disposal',
-    'Asset Reports',
-  ],
-
-  menuItems: [
-    { id: 'asset-dashboard', label: 'Dashboard', path: '/assets', icon: 'LayoutDashboard', order: 1 },
-    { id: 'asset-list', label: 'Assets', path: '/assets/list', icon: 'Cpu', order: 2 },
-    { id: 'asset-depreciation', label: 'Depreciation', path: '/assets/depreciation', icon: 'TrendingDown', order: 3 },
-    { id: 'asset-categories', label: 'Categories', path: '/assets/categories', icon: 'Tag', order: 4 },
-    { id: 'asset-maintenance', label: 'Maintenance', path: '/assets/maintenance', icon: 'Wrench', order: 5 },
-  ],
 
   routes: [
     { path: '/assets', component: () => import('./pages/Dashboard') },

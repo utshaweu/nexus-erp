@@ -1,30 +1,12 @@
-import { DollarSign } from 'lucide-react'
-
+/**
+ * Accounts module manifest (code side).
+ *
+ * Display metadata lives in the `module_catalog` DB table and is merged in by
+ * the ModuleRegistry at login. This file only owns the non-serialisable parts:
+ * id, routes, store slice, and install/uninstall hooks.
+ */
 const accountsModule = {
   id: 'accounts',
-  name: 'Accounts',
-  description: 'Full financial management: invoices, bills, journals, reconciliation, and financial reports.',
-  version: '1.0.0',
-  icon: DollarSign,
-  color: '#8b5cf6',
-  category: 'Finance',
-  dependencies: [],
-  features: [
-    'Chart of Accounts',
-    'Customer Invoices',
-    'Vendor Bills',
-    'Payment Reconciliation',
-    'Journal Entries',
-    'P&L & Balance Sheet',
-  ],
-
-  menuItems: [
-    { id: 'acc-dashboard', label: 'Dashboard', path: '/accounts', icon: 'LayoutDashboard', order: 1 },
-    { id: 'acc-invoices', label: 'Invoices', path: '/accounts/invoices', icon: 'FileText', order: 2 },
-    { id: 'acc-bills', label: 'Bills', path: '/accounts/bills', icon: 'Receipt', order: 3 },
-    { id: 'acc-journals', label: 'Journals', path: '/accounts/journals', icon: 'BookOpen', order: 4 },
-    { id: 'acc-coa', label: 'Chart of Accounts', path: '/accounts/coa', icon: 'List', order: 5 },
-  ],
 
   routes: [
     { path: '/accounts', component: () => import('./pages/Dashboard') },

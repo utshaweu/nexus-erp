@@ -1,50 +1,15 @@
-import { TrendingUp } from 'lucide-react'
-
+/**
+ * Sales module manifest (code side).
+ *
+ * Display metadata — name, description, version, icon, color, category,
+ * features, dependencies, menuItems — lives in the `module_catalog` DB table
+ * (see sql/nexuserp_module_catalog_addendum.sql) and is merged in by the
+ * ModuleRegistry at login. This file only owns what cannot be serialised to a
+ * database: the module id, its routes (lazy page imports), the Zustand store
+ * slice, and the install/uninstall hooks.
+ */
 const salesModule = {
-  id:          'sales',
-  name:        'Sales',
-  description: 'Drive revenue with quotations, sales orders, customer management, and pipeline analytics.',
-  version:     '1.0.0',
-  icon:        TrendingUp,
-  color:       '#10b981',
-  category:    'Operations',
-  dependencies: [],
-  features: [
-    'Quotations & Sales Orders',
-    'Customer Management',
-    'Offers & Discount Rules',
-    'Coupon Code Management',
-    'Sales Pipeline',
-    'Revenue Analytics',
-  ],
-
-  menuItems: [
-    {
-      id: 'sales-dashboard', label: 'Dashboard', path: '/sales',
-      icon: 'LayoutDashboard', order: 1,
-      requiredPermission: { action: 'view', moduleId: 'sales' },
-    },
-    {
-      id: 'sales-orders', label: 'Sales Orders', path: '/sales/orders',
-      icon: 'FileText', order: 2,
-      requiredPermission: { action: 'view', moduleId: 'sales' },
-    },
-    {
-      id: 'sales-quotations', label: 'Quotations', path: '/sales/quotations',
-      icon: 'ClipboardList', order: 3,
-      requiredPermission: { action: 'view', moduleId: 'sales' },
-    },
-    {
-      id: 'sales-customers', label: 'Customers', path: '/sales/customers',
-      icon: 'Users', order: 4,
-      requiredPermission: { action: 'view', moduleId: 'sales' },
-    },
-    {
-      id: 'sales-offers', label: 'Offers & Discounts', path: '/sales/offers',
-      icon: 'Tag', order: 5,
-      requiredPermission: { action: 'view', moduleId: 'sales' },
-    },
-  ],
+  id: 'sales',
 
   routes: [
     { path: '/sales',           component: () => import('./pages/Dashboard') },
