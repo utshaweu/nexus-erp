@@ -1,5 +1,6 @@
 import { supabase } from '@/shared/api/supabase'
 import EventBus from '@core/eventbus/EventBus'
+import { resolveModuleIcon } from '@shared/lib/moduleIcons'
 
 /**
  * ModuleRegistry
@@ -24,6 +25,16 @@ class ModuleRegistry {
     this._catalogue = new Map()
 
     /**
+     * Map<moduleId, row>  — DB-driven metadata from the `module_catalog` table.
+     * Loaded once per login via loadCatalog(). When present for a module it is
+     * merged OVER the code manifest (DB overrides, code is the fallback), so the
+     * name / description / features / menuItems / etc. can be edited in the
+     * database without code changes. Empty if the table is missing or offline —
+     * in which case the code manifests are used verbatim (no behaviour change).
+     */
+    this._catalogMeta = new Map()
+
+    /**
      * Map<tenantId, Set<moduleId>>
      * Each tenant has its own install set.
      * We keep them all in memory so switching tenants is instant.
@@ -45,6 +56,68 @@ class ModuleRegistry {
   register(manifest) {
     if (!manifest?.id) throw new Error('Module manifest must have an id')
     this._catalogue.set(manifest.id, manifest)
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Catalogue metadata (DB-driven manifests)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Load module metadata from the global `module_catalog` table.
+   * Called once on login (from the auth bootstrap), before any UI reads the
+   * registry. The catalogue is global (not tenant-scoped) — which modules a
+   * tenant has *installed* still lives in `tenant_modules`.
+   *
+   * Failures are swallowed on purpose: if the table doesn't exist yet or
+   * Supabase is unreachable, the in-memory metadata stays empty and every
+   * getter falls back to the code manifests — identical to the old behaviour.
+   */
+  async loadCatalog() {
+    try {
+      const { data, error } = await supabase
+        .from('module_catalog')
+        .select('*')
+        .eq('is_active', true)
+
+      if (error) throw error
+
+      this._catalogMeta.clear()
+      ;(data ?? []).forEach(row => this._catalogMeta.set(row.module_id, row))
+    } catch {
+      // Table missing / offline — keep code manifests as the source of truth.
+      this._catalogMeta.clear()
+    }
+
+    this._notifyListeners()
+  }
+
+  /**
+   * Merge DB metadata over a code manifest.
+   * Non-serialisable fields (routes, storeSlice, onInstall/onUninstall) always
+   * come from code; the icon string is resolved to a Lucide component. If no DB
+   * row exists for the module, the code manifest is returned untouched.
+   */
+  _withCatalog(codeManifest, moduleId) {
+    const row = this._catalogMeta.get(moduleId)
+    if (!row) return codeManifest
+
+    const merged = { ...codeManifest }
+    merged.id = codeManifest?.id ?? row.module_id
+
+    if (row.name        != null) merged.name        = row.name
+    if (row.description != null) merged.description = row.description
+    if (row.version     != null) merged.version     = row.version
+    if (row.color       != null) merged.color       = row.color
+    if (row.category    != null) merged.category    = row.category
+    if (Array.isArray(row.features))     merged.features     = row.features
+    if (Array.isArray(row.dependencies)) merged.dependencies = row.dependencies
+    if (Array.isArray(row.menu_items))   merged.menuItems    = row.menu_items
+
+    // DB stores the icon as a string; prefer the resolved DB icon, then the
+    // code component, then a safe fallback.
+    merged.icon = resolveModuleIcon(row.icon) ?? codeManifest?.icon ?? resolveModuleIcon('Puzzle')
+
+    return merged
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -99,14 +172,31 @@ class ModuleRegistry {
   // Read helpers (always relative to the active tenant)
   // ─────────────────────────────────────────────────────────────
 
-  /** Full catalogue — all available modules regardless of tenant */
+  /**
+   * Full catalogue — all available modules regardless of tenant.
+   * Union of code-registered modules and DB-only catalogue entries, each merged
+   * with its DB metadata. Code modules keep their registration order; any
+   * DB-only modules (present in module_catalog but with no code manifest) are
+   * appended — they appear in the App Store but have no routes/pages.
+   */
   getAll() {
-    return Array.from(this._catalogue.values())
+    const ids = new Set([...this._catalogue.keys(), ...this._catalogMeta.keys()])
+    return Array.from(ids)
+      .map(id => this.get(id))
+      .filter(Boolean)
   }
 
-  /** Single manifest by id */
+  /** Single manifest by id — merged with DB metadata if available */
   get(id) {
-    return this._catalogue.get(id)
+    const code = this._catalogue.get(id)
+    if (code) return this._withCatalog(code, id)
+
+    // DB-only module: build a routeless manifest from catalogue metadata.
+    if (this._catalogMeta.has(id)) {
+      return this._withCatalog({ id, routes: [], menuItems: [] }, id)
+    }
+
+    return undefined
   }
 
   /** Is a module installed for the active tenant? */
@@ -114,10 +204,10 @@ class ModuleRegistry {
     return this._getActiveInstalls().has(moduleId)
   }
 
-  /** All installed manifests for the active tenant */
+  /** All installed manifests for the active tenant — merged with DB metadata */
   getInstalled() {
     return Array.from(this._getActiveInstalls())
-      .map(id => this._catalogue.get(id))
+      .map(id => this.get(id))
       .filter(Boolean)
   }
 
@@ -132,12 +222,12 @@ class ModuleRegistry {
   async install(moduleId, tenantId = this._activeTenantId) {
     if (!tenantId) return { success: false, error: 'No active tenant' }
 
-    const manifest = this._catalogue.get(moduleId)
+    const manifest = this.get(moduleId)
     if (!manifest) return { success: false, error: `Module "${moduleId}" not found` }
 
     const installs = this._ensureInstallSet(tenantId)
     if (installs.has(moduleId)) {
-      return { success: false, error: `"${manifest.name}" is already installed` }
+      return { success: false, error: `"${manifest.name ?? moduleId}" is already installed` }
     }
 
     // Resolve all uninstalled dependencies first
@@ -175,7 +265,7 @@ class ModuleRegistry {
     const blockers = this._getInstalledDependents(moduleId, installs)
     if (blockers.length > 0) {
       const names = blockers
-        .map(id => this._catalogue.get(id)?.name ?? id)
+        .map(id => this.get(id)?.name ?? id)
         .join(', ')
       return { success: false, error: `Cannot uninstall — "${names}" depends on this module` }
     }
@@ -246,7 +336,8 @@ class ModuleRegistry {
    * Returns them in the correct install order (deepest dep first).
    */
   _resolveDeps(moduleId, installedSet) {
-    const manifest = this._catalogue.get(moduleId)
+    // Read dependencies from the merged manifest so DB-defined deps are honoured.
+    const manifest = this.get(moduleId)
     if (!manifest?.dependencies?.length) return []
 
     const order   = []
@@ -255,7 +346,7 @@ class ModuleRegistry {
     const visit = (id) => {
       if (visited.has(id)) return
       visited.add(id)
-      const m = this._catalogue.get(id)
+      const m = this.get(id)
       m?.dependencies?.forEach(dep => visit(dep))
       if (!installedSet.has(id)) order.push(id)
     }
@@ -267,7 +358,7 @@ class ModuleRegistry {
   /** Which installed modules declare moduleId as a dependency? */
   _getInstalledDependents(moduleId, installedSet) {
     return Array.from(installedSet).filter(id => {
-      const m = this._catalogue.get(id)
+      const m = this.get(id)
       return m?.dependencies?.includes(moduleId)
     })
   }

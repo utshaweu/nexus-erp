@@ -92,7 +92,7 @@ export default function Home() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="font-display font-bold text-2xl text-slate-900 dark:text-slate-100">
-          Good morning, {firstName} 👋
+          Hello, {firstName}, Welcome Back! 👋
         </h1>
         <p className="text-slate-500 text-sm mt-1">
           {new Date().toLocaleDateString('en-US', {

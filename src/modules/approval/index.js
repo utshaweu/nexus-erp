@@ -1,30 +1,12 @@
-import { CheckSquare } from 'lucide-react'
-
+/**
+ * Approvals module manifest (code side).
+ *
+ * Display metadata lives in the `module_catalog` DB table and is merged in by
+ * the ModuleRegistry at login. This file only owns the non-serialisable parts:
+ * id, routes, store slice, and install/uninstall hooks.
+ */
 const approvalModule = {
   id: 'approval',
-  name: 'Approvals',
-  description: 'Configurable multi-level approval workflows for any ERP document or request.',
-  version: '1.0.0',
-  icon: CheckSquare,
-  color: '#06b6d4',
-  category: 'Operations',
-  dependencies: [],
-  features: [
-    'Multi-level Approval Workflows',
-    'Approval Templates',
-    'Delegation Support',
-    'Approval History & Audit Trail',
-    'Email & In-app Notifications',
-    'Approval Dashboard',
-  ],
-
-  menuItems: [
-    { id: 'approval-dashboard', label: 'Dashboard', path: '/approval', icon: 'LayoutDashboard', order: 1 },
-    { id: 'approval-pending', label: 'Pending Approvals', path: '/approval/pending', icon: 'Clock', order: 2 },
-    { id: 'approval-my', label: 'My Requests', path: '/approval/my-requests', icon: 'Send', order: 3 },
-    { id: 'approval-workflows', label: 'Workflows', path: '/approval/workflows', icon: 'GitBranch', order: 4 },
-    { id: 'approval-history', label: 'History', path: '/approval/history', icon: 'History', order: 5 },
-  ],
 
   routes: [
     { path: '/approval', component: () => import('./pages/Dashboard') },
