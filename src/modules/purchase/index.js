@@ -13,6 +13,7 @@ const purchaseModule = {
     { path: '/purchase/orders',    component: () => import('./pages/PurchaseOrders') },
     { path: '/purchase/orders/:id',component: () => import('./pages/PurchaseOrderDetail') },
     { path: '/purchase/rfq',       component: () => import('./pages/RFQ') },
+    { path: '/purchase/rfq/:id',   component: () => import('./pages/RFQDetail') },
     { path: '/purchase/vendors',   component: () => import('./pages/Vendors') },
   ],
 

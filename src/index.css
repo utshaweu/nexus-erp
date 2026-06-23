@@ -57,6 +57,28 @@
   }
 }
 
+@media print {
+  aside,
+  header {
+    display: none !important;
+  }
+
+  main {
+    overflow: visible !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* backdrop-blur (used on Cards) prints as a solid gray box — kill it */
+  * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;

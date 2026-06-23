@@ -28,11 +28,21 @@ const ICON_MAP = {
 // ── NavItem ───────────────────────────────────────────────────
 function NavItem({ item }) {
   const Icon = ICON_MAP[item.icon] ?? LayoutDashboard
+  const { pathname } = useLocation()
+
+  // Section sub-pages (depth ≥ 2, e.g. /purchase/orders) stay active on their
+  // detail routes (/purchase/orders/:id). Roots like '/' and the module
+  // dashboard '/purchase' (depth ≤ 1) match exactly so they don't light up on
+  // every child route.
+  const depth = item.path.split('/').filter(Boolean).length
+  const isActive =
+    pathname === item.path ||
+    (depth >= 2 && pathname.startsWith(item.path + '/'))
+
   return (
-    <NavLink
+    <Link
       to={item.path}
-      end
-      className={({ isActive }) => clsx(
+      className={clsx(
         'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium',
         'transition-all duration-150 border',
         isActive
@@ -40,17 +50,13 @@ function NavItem({ item }) {
           : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-surface-100 dark:hover:bg-surface-800 border-transparent'
       )}
     >
-      {({ isActive }) => (
-        <>
-          <Icon className={clsx(
-            'w-4 h-4 flex-shrink-0 transition-colors',
-            isActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 dark:text-slate-500'
-          )} />
-          <span className="truncate">{item.label}</span>
-          {isActive && <div className="ml-auto w-1 h-1 rounded-full bg-brand-500 dark:bg-brand-400" />}
-        </>
-      )}
-    </NavLink>
+      <Icon className={clsx(
+        'w-4 h-4 flex-shrink-0 transition-colors',
+        isActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 dark:text-slate-500'
+      )} />
+      <span className="truncate">{item.label}</span>
+      {isActive && <div className="ml-auto w-1 h-1 rounded-full bg-brand-500 dark:bg-brand-400" />}
+    </Link>
   )
 }
 
