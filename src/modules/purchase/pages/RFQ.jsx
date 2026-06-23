@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Search, Send, Eye } from 'lucide-react'
+import { Plus, Search, Send, Eye, Trash2 } from 'lucide-react'
 import {
   Button, Badge, Table, Thead, Th, Tbody, Tr, Td,
   PageHeader, Card, Modal, Input, Select, Spinner,
@@ -177,6 +178,14 @@ export default function RFQ() {
     fetchRFQs()
   }
 
+  const handleDelete = async (id, rfqNumber) => {
+    if (!window.confirm(`Delete ${rfqNumber}? This cannot be undone.`)) return
+    const { error } = await supabase.from('rfqs').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('RFQ deleted.')
+    fetchRFQs()
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -216,8 +225,8 @@ export default function RFQ() {
                 onClick={() => setStatusFilter(s)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                   statusFilter === s
-                    ? 'bg-brand-600/20 text-brand-300 border border-brand-600/30'
-                    : 'text-slate-500 hover:text-slate-200'
+                    ? 'bg-brand-600/10 dark:bg-brand-600/20 text-brand-700 dark:text-brand-300 border border-brand-600/20 dark:border-brand-600/30'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
                 }`}
               >
                 {s === 'all' ? 'All' : STATUS[s]?.label}
@@ -242,10 +251,10 @@ export default function RFQ() {
                   return (
                     <Tr key={rfq.id}>
                       <Td>
-                        <span className="font-mono text-xs text-brand-400">{rfq.rfq_number}</span>
+                        <span className="font-mono text-xs text-brand-600 dark:text-brand-400">{rfq.rfq_number}</span>
                       </Td>
                       <Td>
-                        <span className="font-medium text-slate-200">{rfq.vendor?.name || '—'}</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-200">{rfq.vendor?.name || '—'}</span>
                       </Td>
                       <Td>
                         <span className="text-slate-500">{rfq.deadline || '—'}</span>
@@ -259,9 +268,11 @@ export default function RFQ() {
                       <Td><Badge color={s.color}>{s.label}</Badge></Td>
                       <Td>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="xs">
-                            <Eye className="w-3.5 h-3.5" />
-                          </Button>
+                          <Link to={`/purchase/rfq/${rfq.id}`}>
+                            <Button variant="ghost" size="xs">
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                          </Link>
                           {rfq.status === 'draft' && (
                             <PermissionGate action="edit" moduleId="purchase">
                               <Button
@@ -273,6 +284,15 @@ export default function RFQ() {
                               </Button>
                             </PermissionGate>
                           )}
+                          <PermissionGate action="delete" moduleId="purchase">
+                            <Button
+                              variant="danger"
+                              size="xs"
+                              onClick={() => handleDelete(rfq.id, rfq.rfq_number)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </PermissionGate>
                         </div>
                       </Td>
                     </Tr>

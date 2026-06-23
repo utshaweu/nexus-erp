@@ -262,8 +262,8 @@ export default function PurchaseOrders() {
                 onClick={() => setStatusFilter(s)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                   statusFilter === s
-                    ? 'bg-brand-600/20 text-brand-300 border border-brand-600/30'
-                    : 'text-slate-500 hover:text-slate-200'
+                    ? 'bg-brand-600/10 dark:bg-brand-600/20 text-brand-700 dark:text-brand-300 border border-brand-600/20 dark:border-brand-600/30'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
                 }`}
               >
                 {s === 'all' ? 'All' : STATUS[s]?.label}
@@ -301,13 +301,13 @@ export default function PurchaseOrders() {
                     <Tr key={order.id}>
                       <Td>
                         <Link to={`/purchase/orders/${order.id}`}>
-                          <span className="font-mono text-xs text-brand-400 hover:text-brand-300">
+                          <span className="font-mono text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
                             {order.order_number}
                           </span>
                         </Link>
                       </Td>
                       <Td>
-                        <span className="font-medium text-slate-200">{order.vendor?.name || '—'}</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-200">{order.vendor?.name || '—'}</span>
                       </Td>
                       <Td>
                         <span className="font-mono text-xs text-slate-500">{order.reference || '—'}</span>

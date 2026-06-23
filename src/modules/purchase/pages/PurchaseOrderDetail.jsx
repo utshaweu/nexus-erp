@@ -4,10 +4,10 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
-  PageHeader, Badge, Card, Button, Modal, Input,
+  PageHeader, Badge, Card, Button, Modal, Input, Select,
   Table, Thead, Th, Tbody, Tr, Td, Spinner,
 } from '@shared/components/ui'
-import { CheckCircle, XCircle, Printer, ArrowLeft, Package, Plus, Pencil, Trash2 } from 'lucide-react'
+import { CheckCircle, XCircle, Printer, ArrowLeft, Package, Plus, Pencil, Trash2, Send } from 'lucide-react'
 import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import toast from '@shared/lib/toast'
@@ -23,7 +23,7 @@ const lineSchema = z.object({
 
 // ── LineModal ─────────────────────────────────────────────────────────────────
 
-function LineModal({ open, onClose, line, orderId, tenantId, onSaved }) {
+function LineModal({ open, onClose, line, lines = [], orderId, tenantId, onSaved }) {
   const isEdit = Boolean(line)
   const {
     register, handleSubmit, reset, setValue,
@@ -33,48 +33,57 @@ function LineModal({ open, onClose, line, orderId, tenantId, onSaved }) {
     defaultValues: { product_name: '', quantity: 1, unit_price: 0, tax_rate: 0 },
   })
 
-  // Product search state
-  const [products,    setProducts]    = useState([])
-  const [searchTerm,  setSearchTerm]  = useState('')
-  const [showDrop,    setShowDrop]    = useState(false)
+  // Inventory products for the dropdown
+  const [allProducts, setAllProducts] = useState([])
+  const [selectedId,  setSelectedId]  = useState('')
 
+  // Load active inventory products once the modal opens, then seed the form
   useEffect(() => {
     if (!open) return
-    const vals = line
-      ? { product_name: line.product_name, quantity: Number(line.quantity), unit_price: Number(line.unit_price), tax_rate: Number(line.tax_rate) || 0 }
-      : { product_name: '', quantity: 1, unit_price: 0, tax_rate: 0 }
-    reset(vals)
-    setSearchTerm(line?.product_name ?? '')
-    setProducts([])
-    setShowDrop(false)
-  }, [open, line, reset])
-
-  // Debounced product search from inventory
-  useEffect(() => {
-    if (!searchTerm || searchTerm.length < 2) { setProducts([]); setShowDrop(false); return }
-    const t = setTimeout(async () => {
+    let active = true
+    ;(async () => {
       const { data } = await supabase
         .from('products')
-        .select('id, name, cost_price, sale_price')
+        .select('id, name, cost_price')
         .eq('tenant_id', tenantId)
         .eq('status', 'active')
-        .ilike('name', `%${searchTerm}%`)
-        .limit(6)
-      if (data?.length) { setProducts(data); setShowDrop(true) }
-      else { setProducts([]); setShowDrop(false) }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [searchTerm, tenantId])
+        .order('name')
+      if (!active) return
+      const list = data || []
+      setAllProducts(list)
 
-  const pickProduct = (p) => {
-    setValue('product_name', p.name)
-    setValue('unit_price', Number(p.cost_price) || 0)
-    setSearchTerm(p.name)
-    setProducts([])
-    setShowDrop(false)
+      const vals = line
+        ? { product_name: line.product_name, quantity: Number(line.quantity), unit_price: Number(line.unit_price), tax_rate: Number(line.tax_rate) || 0 }
+        : { product_name: '', quantity: 1, unit_price: 0, tax_rate: 0 }
+      reset(vals)
+
+      // Pre-select the matching inventory product when editing
+      const match = line ? list.find(p => p.name === line.product_name) : null
+      setSelectedId(match ? match.id : '')
+    })()
+    return () => { active = false }
+  }, [open, line, reset, tenantId])
+
+  const handleProductChange = (e) => {
+    const val = e.target.value
+    setSelectedId(val)
+    const p = allProducts.find(prod => prod.id === val)
+    if (p) {
+      setValue('product_name', p.name)
+      setValue('unit_price', Number(p.cost_price) || 0)
+    } else {
+      setValue('product_name', '')
+    }
   }
 
   const onSubmit = async (data) => {
+    // Block duplicate products on the same order (ignore the row being edited)
+    const dupe = (lines || []).some(l =>
+      l.id !== line?.id &&
+      (l.product_name || '').trim().toLowerCase() === data.product_name.trim().toLowerCase()
+    )
+    if (dupe) { toast.error('This item is already on the order.'); return }
+
     const qty   = Number(data.quantity)
     const price = Number(data.unit_price)
     const tax   = Number(data.tax_rate) || 0
@@ -98,53 +107,26 @@ function LineModal({ open, onClose, line, orderId, tenantId, onSaved }) {
     onClose()
   }
 
-  const handleClose = () => { reset(); setSearchTerm(''); setProducts([]); setShowDrop(false); onClose() }
+  const handleClose = () => { reset(); setSelectedId(''); onClose() }
 
   return (
     <Modal open={open} onClose={handleClose} title={isEdit ? 'Edit Line Item' : 'Add Line Item'} size="md">
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="space-y-4">
-          {/* Product name with inventory search */}
+          {/* Product — choose from inventory */}
           <div>
-            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1.5">
-              Product / Description
-            </label>
-            <div className="relative">
-              <input
-                value={searchTerm}
-                onChange={e => {
-                  setSearchTerm(e.target.value)
-                  setValue('product_name', e.target.value)
-                }}
-                onBlur={() => setTimeout(() => setShowDrop(false), 150)}
-                placeholder="Type to search inventory or enter manually…"
-                className="w-full px-3 py-2 rounded-lg text-sm
-                           text-slate-900 dark:text-slate-200
-                           placeholder:text-slate-400 dark:placeholder:text-slate-600
-                           bg-white dark:bg-surface-900
-                           border border-surface-200 dark:border-surface-700
-                           hover:border-surface-300 dark:hover:border-surface-600
-                           focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500
-                           transition-colors"
-              />
-              {showDrop && products.length > 0 && (
-                <div className="absolute z-50 top-full mt-1 w-full bg-surface-900 border border-surface-700 rounded-lg shadow-xl overflow-hidden">
-                  {products.map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onMouseDown={() => pickProduct(p)}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-surface-800 flex items-center justify-between"
-                    >
-                      <span className="text-slate-200">{p.name}</span>
-                      <span className="text-slate-500 text-xs">Cost: ${Number(p.cost_price || 0).toLocaleString()}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Select
+              label="Product / Description"
+              value={selectedId}
+              onChange={handleProductChange}
+            >
+              <option value="">Select a product…</option>
+              {allProducts.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </Select>
             {errors.product_name && (
-              <p className="text-red-400 text-xs mt-1">{errors.product_name.message}</p>
+              <p className="text-red-500 dark:text-red-400 text-xs mt-1">{errors.product_name.message}</p>
             )}
           </div>
 
@@ -283,7 +265,7 @@ export default function PurchaseOrderDetail() {
     return (
       <div className="text-center py-16">
         <p className="text-slate-500 mb-2">Order not found.</p>
-        <Link to="/purchase/orders" className="text-brand-400 text-sm hover:text-brand-300">
+        <Link to="/purchase/orders" className="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 text-sm">
           ← Back to orders
         </Link>
       </div>
@@ -302,12 +284,26 @@ export default function PurchaseOrderDetail() {
         subtitle={`Vendor: ${order.vendor?.name || '—'}`}
         breadcrumb="Purchase / Orders"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 print:hidden">
             <Link to="/purchase/orders">
               <Button variant="secondary" size="sm">
                 <ArrowLeft className="w-4 h-4" />Back
               </Button>
             </Link>
+
+            <PermissionGate action="edit" moduleId="purchase">
+              {order.status === 'draft' && (
+                <Button
+                  variant="success"
+                  size="sm"
+                  disabled={lines.length === 0}
+                  title={lines.length === 0 ? 'Add at least one line item first' : undefined}
+                  onClick={() => updateStatus('pending')}
+                >
+                  <Send className="w-4 h-4" />Submit for Approval
+                </Button>
+              )}
+            </PermissionGate>
 
             <PermissionGate action="approve" moduleId="purchase">
               {order.status === 'pending' && (
@@ -343,10 +339,10 @@ export default function PurchaseOrderDetail() {
           <Card>
             <div className="p-5">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-slate-300">Order Lines</h3>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300">Order Lines</h3>
                 {canEditLines && (
                   <PermissionGate action="edit" moduleId="purchase">
-                    <Button size="xs" onClick={openAddLine}>
+                    <Button size="xs" onClick={openAddLine} className="print:hidden">
                       <Plus className="w-3.5 h-3.5" />Add Line
                     </Button>
                   </PermissionGate>
@@ -377,7 +373,7 @@ export default function PurchaseOrderDetail() {
                       return (
                         <Tr key={item.id}>
                           <Td>
-                            <span className="font-medium text-slate-200">{item.product_name}</span>
+                            <span className="font-medium text-slate-900 dark:text-slate-200">{item.product_name}</span>
                           </Td>
                           <Td>{Number(item.quantity)}</Td>
                           <Td>${Number(item.unit_price).toLocaleString()}</Td>
@@ -405,16 +401,16 @@ export default function PurchaseOrderDetail() {
               )}
 
               {/* Totals */}
-              <div className="mt-4 pt-4 border-t border-surface-800 space-y-1.5 text-sm">
-                <div className="flex justify-between text-slate-400">
+              <div className="mt-4 pt-4 border-t border-surface-200 dark:border-surface-800 space-y-1.5 text-sm">
+                <div className="flex justify-between text-slate-500 dark:text-slate-400">
                   <span>Subtotal</span>
                   <span>${subtotal.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-slate-400">
+                <div className="flex justify-between text-slate-500 dark:text-slate-400">
                   <span>Tax</span>
                   <span>${taxAmt.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between font-bold text-slate-100 text-base pt-2 border-t border-surface-800 mt-2">
+                <div className="flex justify-between font-bold text-slate-900 dark:text-slate-100 text-base pt-2 border-t border-surface-200 dark:border-surface-800 mt-2">
                   <span>Total</span>
                   <span>${total.toLocaleString()}</span>
                 </div>
@@ -426,7 +422,7 @@ export default function PurchaseOrderDetail() {
         {/* Sidebar */}
         <div className="space-y-4">
           <Card className="p-5">
-            <h3 className="text-sm font-semibold text-slate-300 mb-4">Order Info</h3>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300 mb-4">Order Info</h3>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">Status</span>
@@ -434,40 +430,40 @@ export default function PurchaseOrderDetail() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Order Date</span>
-                <span className="text-slate-300">{order.order_date}</span>
+                <span className="text-slate-700 dark:text-slate-300">{order.order_date}</span>
               </div>
               {order.expected_date && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">Expected</span>
-                  <span className="text-slate-300">{order.expected_date}</span>
+                  <span className="text-slate-700 dark:text-slate-300">{order.expected_date}</span>
                 </div>
               )}
               {order.reference && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">Reference</span>
-                  <span className="font-mono text-xs text-slate-300">{order.reference}</span>
+                  <span className="font-mono text-xs text-slate-700 dark:text-slate-300">{order.reference}</span>
                 </div>
               )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Lines</span>
-                <span className="text-slate-300">{lines.length}</span>
+                <span className="text-slate-700 dark:text-slate-300">{lines.length}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Subtotal</span>
-                <span className="text-slate-300">${subtotal.toLocaleString()}</span>
+                <span className="text-slate-700 dark:text-slate-300">${subtotal.toLocaleString()}</span>
               </div>
-              <div className="flex justify-between font-semibold pt-2 border-t border-surface-800">
+              <div className="flex justify-between font-semibold pt-2 border-t border-surface-200 dark:border-surface-800">
                 <span className="text-slate-400">Total</span>
-                <span className="text-slate-100">${total.toLocaleString()}</span>
+                <span className="text-slate-900 dark:text-slate-100">${total.toLocaleString()}</span>
               </div>
             </div>
           </Card>
 
           {order.vendor && (
             <Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-300 mb-3">Vendor</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300 mb-3">Vendor</h3>
               <div className="space-y-1.5 text-sm">
-                <p className="font-medium text-slate-200">{order.vendor.name}</p>
+                <p className="font-medium text-slate-900 dark:text-slate-200">{order.vendor.name}</p>
                 {order.vendor.contact_name && (
                   <p className="text-slate-400">{order.vendor.contact_name}</p>
                 )}
@@ -483,7 +479,7 @@ export default function PurchaseOrderDetail() {
 
           {order.notes && (
             <Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-300 mb-2">Notes</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300 mb-2">Notes</h3>
               <p className="text-sm text-slate-400">{order.notes}</p>
             </Card>
           )}
@@ -494,6 +490,7 @@ export default function PurchaseOrderDetail() {
         open={showLineModal}
         onClose={closeLineModal}
         line={editingLine}
+        lines={lines}
         orderId={id}
         tenantId={tenantId}
         onSaved={handleLineSaved}
