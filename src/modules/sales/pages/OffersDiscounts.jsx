@@ -44,23 +44,36 @@ const offerSchema = z.object({
   name:           z.string().trim().min(1, 'Name is required'),
   description:    z.string().trim().optional(),
   offer_type:     z.enum(['percentage', 'fixed_amount', 'buy_x_get_y']),
-  discount_value: z.coerce.number({ invalid_type_error: 'Enter a number' }).min(0, 'Must be ≥ 0'),
+  discount_value: z.coerce.number({ invalid_type_error: 'Enter a number' }).min(0, 'Must be ≥ 0').default(0),
   coupon_code:    z.string().trim().optional(),
   minimum_amount: z.coerce.number({ invalid_type_error: 'Enter a number' }).min(0).default(0),
   applies_to:     z.enum(['all', 'product', 'category', 'customer']).default('all'),
   applies_to_ref: z.string().trim().optional(),
+  // Buy X Get Y Free — which product/qty to buy, which product/qty is free
+  buy_product:    z.string().trim().optional(),
+  buy_qty:        z.coerce.number({ invalid_type_error: 'Enter a number' }).min(0).default(1),
+  get_product:    z.string().trim().optional(),
+  get_qty:        z.coerce.number({ invalid_type_error: 'Enter a number' }).min(0).default(1),
   start_date:     z.string().optional(),
   end_date:       z.string().optional(),
   usage_limit:    z.coerce.number({ invalid_type_error: 'Enter a number' }).int().min(0).optional(),
   is_active:      z.boolean().default(true),
-}).refine(d => {
-  if (d.offer_type === 'percentage' && d.discount_value > 100) return false
-  return true
-}, { message: 'Percentage cannot exceed 100%', path: ['discount_value'] })
+})
+  .refine(d => !(d.offer_type === 'percentage' && d.discount_value > 100),
+    { message: 'Percentage cannot exceed 100%', path: ['discount_value'] })
+  .refine(d => d.offer_type !== 'buy_x_get_y' || !!d.buy_product,
+    { message: 'Select the product to buy', path: ['buy_product'] })
+  .refine(d => d.offer_type !== 'buy_x_get_y' || d.buy_qty >= 1,
+    { message: 'Must be ≥ 1', path: ['buy_qty'] })
+  .refine(d => d.offer_type !== 'buy_x_get_y' || !!d.get_product,
+    { message: 'Select the free product', path: ['get_product'] })
+  .refine(d => d.offer_type !== 'buy_x_get_y' || d.get_qty >= 1,
+    { message: 'Must be ≥ 1', path: ['get_qty'] })
 
 const DEFAULT_VALS = {
   name: '', description: '', offer_type: 'percentage', discount_value: 0,
   coupon_code: '', minimum_amount: 0, applies_to: 'all', applies_to_ref: '',
+  buy_product: '', buy_qty: 1, get_product: '', get_qty: 1,
   start_date: '', end_date: '', usage_limit: 0, is_active: true,
 }
 
@@ -78,6 +91,25 @@ function OfferModal({ open, onClose, offer, onSaved }) {
   const offerType = watch('offer_type', 'percentage')
   const appliesTo = watch('applies_to', 'all')
 
+  // Products + customers for the "applies to" dropdowns
+  const [products,  setProducts]  = useState([])
+  const [customers, setCustomers] = useState([])
+
+  useEffect(() => {
+    if (!open || !tenantId) return
+    let active = true
+    ;(async () => {
+      const [prodRes, custRes] = await Promise.all([
+        supabase.from('products').select('id, name').eq('tenant_id', tenantId).eq('status', 'active').order('name'),
+        supabase.from('customers').select('id, name').eq('tenant_id', tenantId).eq('status', 'active').order('name'),
+      ])
+      if (!active) return
+      setProducts(prodRes.data || [])
+      setCustomers(custRes.data || [])
+    })()
+    return () => { active = false }
+  }, [open, tenantId])
+
   useEffect(() => {
     if (!open) return
     reset(offer ? {
@@ -89,6 +121,10 @@ function OfferModal({ open, onClose, offer, onSaved }) {
       minimum_amount: Number(offer.minimum_amount) || 0,
       applies_to:     offer.applies_to     ?? 'all',
       applies_to_ref: offer.applies_to_ref ?? '',
+      buy_product:    offer.buy_product_name ?? '',
+      buy_qty:        Number(offer.buy_quantity) || 1,
+      get_product:    offer.get_product_name ?? '',
+      get_qty:        Number(offer.get_quantity) || 1,
       start_date:     offer.start_date     ?? '',
       end_date:       offer.end_date       ?? '',
       usage_limit:    Number(offer.usage_limit) || 0,
@@ -97,16 +133,21 @@ function OfferModal({ open, onClose, offer, onSaved }) {
   }, [open, offer, reset])
 
   const onSubmit = async (data) => {
+    const isBxgy = data.offer_type === 'buy_x_get_y'
     const payload = {
       tenant_id:      tenantId,
       name:           data.name,
       description:    data.description   || null,
       offer_type:     data.offer_type,
-      discount_value: data.discount_value,
+      discount_value: isBxgy ? 0 : data.discount_value,
       coupon_code:    data.coupon_code   ? data.coupon_code.toUpperCase() : null,
       minimum_amount: data.minimum_amount || 0,
-      applies_to:     data.applies_to,
-      applies_to_ref: data.applies_to !== 'all' ? (data.applies_to_ref || null) : null,
+      applies_to:     isBxgy ? 'all' : data.applies_to,
+      applies_to_ref: (!isBxgy && data.applies_to !== 'all') ? (data.applies_to_ref || null) : null,
+      buy_product_name: isBxgy ? (data.buy_product || null) : null,
+      buy_quantity:     isBxgy ? (Number(data.buy_qty) || 0) : null,
+      get_product_name: isBxgy ? (data.get_product || null) : null,
+      get_quantity:     isBxgy ? (Number(data.get_qty) || 0) : null,
       start_date:     data.start_date   || null,
       end_date:       data.end_date     || null,
       usage_limit:    data.usage_limit  || null,
@@ -167,31 +208,54 @@ function OfferModal({ open, onClose, offer, onSaved }) {
               <option value="buy_x_get_y">Buy X Get Y Free</option>
             </Select>
 
-            <Input
-              label={
-                offerType === 'percentage'   ? 'Discount %' :
-                offerType === 'fixed_amount' ? 'Discount Amount ($)' :
-                'Buy (Quantity)'
-              }
-              type="number"
-              step="0.01"
-              min="0"
-              max={offerType === 'percentage' ? 100 : undefined}
-              placeholder={offerType === 'percentage' ? '10' : offerType === 'fixed_amount' ? '50' : '3'}
-              error={errors.discount_value?.message}
-              {...register('discount_value')}
-            />
+            {offerType !== 'buy_x_get_y' && (
+              <Input
+                label={offerType === 'percentage' ? 'Discount %' : 'Discount Amount ($)'}
+                type="number"
+                step="0.01"
+                min="0"
+                max={offerType === 'percentage' ? 100 : undefined}
+                placeholder={offerType === 'percentage' ? '10' : '50'}
+                error={errors.discount_value?.message}
+                {...register('discount_value')}
+              />
+            )}
           </div>
 
           {offerType === 'buy_x_get_y' && (
-            <Input
-              label="Get Free (Quantity)"
-              type="number"
-              step="1"
-              min="1"
-              placeholder="1"
-              {...register('applies_to_ref')}
-            />
+            <div className="rounded-lg border border-surface-200 dark:border-surface-700 p-4 space-y-3">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                Buy X Get Y Free — pick the items &amp; quantities
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <Select label="Buy Product" error={errors.buy_product?.message} {...register('buy_product')}>
+                  <option value="">Select product…</option>
+                  {products.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                </Select>
+                <Input
+                  label="Buy Quantity"
+                  type="number"
+                  step="1"
+                  min="1"
+                  placeholder="3"
+                  error={errors.buy_qty?.message}
+                  {...register('buy_qty')}
+                />
+                <Select label="Get Free Product" error={errors.get_product?.message} {...register('get_product')}>
+                  <option value="">Select product…</option>
+                  {products.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                </Select>
+                <Input
+                  label="Get Free Quantity"
+                  type="number"
+                  step="1"
+                  min="1"
+                  placeholder="1"
+                  error={errors.get_qty?.message}
+                  {...register('get_qty')}
+                />
+              </div>
+            </div>
           )}
 
           {/* Coupon code + Min amount */}
@@ -228,12 +292,16 @@ function OfferModal({ open, onClose, offer, onSaved }) {
                     <option value="">Select category…</option>
                     {PRODUCT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </Select>
+                ) : appliesTo === 'product' ? (
+                  <Select label="Product" {...register('applies_to_ref')}>
+                    <option value="">Select product…</option>
+                    {products.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                  </Select>
                 ) : (
-                  <Input
-                    label={appliesTo === 'product' ? 'Product Name' : 'Customer Name'}
-                    placeholder={appliesTo === 'product' ? 'Product name…' : 'Customer name…'}
-                    {...register('applies_to_ref')}
-                  />
+                  <Select label="Customer" {...register('applies_to_ref')}>
+                    <option value="">Select customer…</option>
+                    {customers.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </Select>
                 )
               )}
             </div>
@@ -277,8 +345,8 @@ function OfferModal({ open, onClose, offer, onSaved }) {
                     onClick={() => field.onChange(!field.value)}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
                       field.value
-                        ? 'bg-emerald-600/20 text-emerald-300 border-emerald-600/40'
-                        : 'bg-surface-800 text-slate-400 border-surface-700'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-600/20 dark:text-emerald-300 dark:border-emerald-600/40'
+                        : 'bg-surface-100 text-slate-500 border-surface-200 dark:bg-surface-800 dark:text-slate-400 dark:border-surface-700'
                     }`}
                   >
                     {field.value
@@ -317,10 +385,10 @@ function CopyButton({ code }) {
   return (
     <button
       onClick={copy}
-      className="flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded bg-surface-700 hover:bg-surface-600 text-slate-300 transition-colors"
+      className="flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded bg-surface-100 hover:bg-surface-200 text-slate-700 dark:bg-surface-700 dark:hover:bg-surface-600 dark:text-slate-300 transition-colors"
       title="Copy coupon code"
     >
-      {copied ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+      {copied ? <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3 h-3" />}
       {code}
     </button>
   )
@@ -433,8 +501,11 @@ export default function OffersDiscounts() {
   const discountLabel = (o) => {
     if (o.offer_type === 'percentage')   return `${Number(o.discount_value)}% off`
     if (o.offer_type === 'fixed_amount') return `$${Number(o.discount_value).toLocaleString()} off`
-    if (o.offer_type === 'buy_x_get_y')
+    if (o.offer_type === 'buy_x_get_y') {
+      if (o.buy_product_name || o.get_product_name)
+        return `Buy ${Number(o.buy_quantity) || 0} × ${o.buy_product_name || 'item'} → ${Number(o.get_quantity) || 0} × ${o.get_product_name || 'item'} free`
       return `Buy ${Number(o.discount_value)} get ${o.applies_to_ref || '1'} free`
+    }
     return '—'
   }
 
@@ -508,8 +579,8 @@ export default function OffersDiscounts() {
                   onClick={() => setTypeFilter(t)}
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                     typeFilter === t
-                      ? 'bg-brand-600/20 text-brand-300 border border-brand-600/30'
-                      : 'text-slate-500 hover:text-slate-200'
+                      ? 'bg-brand-600/10 dark:bg-brand-600/20 text-brand-700 dark:text-brand-300 border border-brand-600/20 dark:border-brand-600/30'
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
                   }`}
                 >
                   {t === 'all' ? 'All Types' : OFFER_TYPES[t]?.label}
@@ -525,8 +596,8 @@ export default function OffersDiscounts() {
                   onClick={() => setStatusFilter(s)}
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                     statusFilter === s
-                      ? 'bg-brand-600/20 text-brand-300 border border-brand-600/30'
-                      : 'text-slate-500 hover:text-slate-200'
+                      ? 'bg-brand-600/10 dark:bg-brand-600/20 text-brand-700 dark:text-brand-300 border border-brand-600/20 dark:border-brand-600/30'
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
                   }`}
                 >
                   {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
@@ -576,7 +647,7 @@ export default function OffersDiscounts() {
                     <Tr key={offer.id}>
                       <Td>
                         <div>
-                          <p className="font-medium text-slate-200">{offer.name}</p>
+                          <p className="font-medium text-slate-900 dark:text-slate-200">{offer.name}</p>
                           {offer.description && (
                             <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[160px]">{offer.description}</p>
                           )}
@@ -586,7 +657,7 @@ export default function OffersDiscounts() {
                         <Badge color={typeInfo.color}>{typeInfo.label}</Badge>
                       </Td>
                       <Td>
-                        <span className="font-semibold text-emerald-400">{discountLabel(offer)}</span>
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">{discountLabel(offer)}</span>
                         {Number(offer.minimum_amount) > 0 && (
                           <p className="text-xs text-slate-500 mt-0.5">
                             Min. ${Number(offer.minimum_amount).toLocaleString()}
@@ -600,7 +671,7 @@ export default function OffersDiscounts() {
                         }
                       </Td>
                       <Td>
-                        <span className="text-sm text-slate-400">
+                        <span className="text-sm text-slate-600 dark:text-slate-400">
                           {OFFER_APPLIES_TO_LABELS[offer.applies_to] || '—'}
                         </span>
                         {offer.applies_to !== 'all' && offer.applies_to_ref && (
@@ -609,7 +680,7 @@ export default function OffersDiscounts() {
                       </Td>
                       <Td>
                         {offer.start_date || offer.end_date ? (
-                          <div className="text-xs text-slate-400 space-y-0.5">
+                          <div className="text-xs text-slate-600 dark:text-slate-400 space-y-0.5">
                             {offer.start_date && <div>From: {offer.start_date}</div>}
                             {offer.end_date   && <div>To: {offer.end_date}</div>}
                           </div>
@@ -618,7 +689,7 @@ export default function OffersDiscounts() {
                         )}
                       </Td>
                       <Td>
-                        <span className="text-sm text-slate-300">
+                        <span className="text-sm text-slate-700 dark:text-slate-300">
                           {Number(offer.usage_count)}
                           {offer.usage_limit
                             ? <span className="text-slate-500"> / {offer.usage_limit}</span>
@@ -647,7 +718,7 @@ export default function OffersDiscounts() {
                               size="xs"
                               onClick={() => handleToggle(offer)}
                               title={offer.is_active ? 'Deactivate' : 'Activate'}
-                              className={offer.is_active ? 'text-yellow-400 hover:text-yellow-300' : 'text-emerald-400 hover:text-emerald-300'}
+                              className={offer.is_active ? 'text-yellow-600 hover:text-yellow-700 dark:text-yellow-400 dark:hover:text-yellow-300' : 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300'}
                             >
                               {offer.is_active
                                 ? <ToggleRight className="w-3.5 h-3.5" />

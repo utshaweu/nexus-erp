@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Search, Send, Trash2, CheckCircle } from 'lucide-react'
+import { Plus, Search, Send, Trash2, CheckCircle, Eye } from 'lucide-react'
 import {
   Button, Badge, Table, Thead, Th, Tbody, Tr, Td,
   PageHeader, Card, Modal, Input, Select, Spinner,
@@ -257,8 +258,8 @@ export default function Quotations() {
                 onClick={() => setStatusFilter(s)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                   statusFilter === s
-                    ? 'bg-brand-600/20 text-brand-300 border border-brand-600/30'
-                    : 'text-slate-500 hover:text-slate-200'
+                    ? 'bg-brand-600/10 dark:bg-brand-600/20 text-brand-700 dark:text-brand-300 border border-brand-600/20 dark:border-brand-600/30'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
                 }`}
               >
                 {s === 'all' ? 'All' : STATUS[s]?.label}
@@ -289,10 +290,14 @@ export default function Quotations() {
                   return (
                     <Tr key={q.id}>
                       <Td>
-                        <span className="font-mono text-xs text-emerald-400">{q.quotation_number}</span>
+                        <Link to={`/sales/quotations/${q.id}`}>
+                          <span className="font-mono text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300">
+                            {q.quotation_number}
+                          </span>
+                        </Link>
                       </Td>
                       <Td>
-                        <span className="font-medium text-slate-200">{q.customer?.name || '—'}</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-200">{q.customer?.name || '—'}</span>
                       </Td>
                       <Td>
                         <span className="text-slate-500">{q.quotation_date}</span>
@@ -309,6 +314,11 @@ export default function Quotations() {
                       <Td><Badge color={s.color}>{s.label}</Badge></Td>
                       <Td>
                         <div className="flex gap-1">
+                          <Link to={`/sales/quotations/${q.id}`}>
+                            <Button variant="ghost" size="xs">
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                          </Link>
                           {q.status === 'draft' && (
                             <PermissionGate action="edit" moduleId="sales">
                               <Button
