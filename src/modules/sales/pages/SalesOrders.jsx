@@ -21,6 +21,7 @@ import {
 
 const orderSchema = z.object({
   customer_id:   z.string().min(1, 'Customer is required'),
+  reference:     z.string().optional(),
   order_date:    z.string().min(1, 'Order date is required'),
   delivery_date: z.string().optional(),
   notes:         z.string().optional(),
@@ -33,7 +34,7 @@ function NewOrderModal({ open, onClose, customers, onCreated }) {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(orderSchema),
-    defaultValues: { customer_id: '', order_date: '', delivery_date: '', notes: '' },
+    defaultValues: { customer_id: '', reference: '', order_date: '', delivery_date: '', notes: '' },
   })
 
   const onSubmit = async (data) => {
@@ -44,6 +45,7 @@ function NewOrderModal({ open, onClose, customers, onCreated }) {
       tenant_id:     tenantId,
       order_number:  orderNumber,
       customer_id:   data.customer_id,
+      reference:     data.reference || null,
       order_date:    data.order_date,
       delivery_date: data.delivery_date || null,
       notes:         data.notes         || null,
@@ -70,6 +72,13 @@ function NewOrderModal({ open, onClose, customers, onCreated }) {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </Select>
+
+          <Input
+            label="Reference"
+            placeholder="Customer PO / external ref…"
+            error={errors.reference?.message}
+            {...register('reference')}
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <Input
@@ -148,7 +157,7 @@ export default function SalesOrders() {
       let query = supabase
         .from('sales_orders')
         .select(
-          'id, order_number, status, order_date, total_amount, delivery_date, customer:customers(name)',
+          'id, order_number, reference, status, order_date, total_amount, delivery_date, customer:customers(name)',
           { count: 'exact' },
         )
         .eq('tenant_id', tenantId)
@@ -160,7 +169,10 @@ export default function SalesOrders() {
       }
 
       if (search.trim()) {
-        const orParts = [`order_number.ilike.%${search.trim()}%`]
+        const orParts = [
+          `order_number.ilike.%${search.trim()}%`,
+          `reference.ilike.%${search.trim()}%`,
+        ]
         if (customerIds.length > 0) {
           orParts.push(`customer_id.in.(${customerIds.join(',')})`)
         }
@@ -249,8 +261,8 @@ export default function SalesOrders() {
                 onClick={() => setStatusFilter(s)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                   statusFilter === s
-                    ? 'bg-brand-600/20 text-brand-300 border border-brand-600/30'
-                    : 'text-slate-500 hover:text-slate-200'
+                    ? 'bg-brand-600/10 dark:bg-brand-600/20 text-brand-700 dark:text-brand-300 border border-brand-600/20 dark:border-brand-600/30'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
                 }`}
               >
                 {s === 'all' ? 'All' : STATUS[s]?.label}
@@ -274,6 +286,7 @@ export default function SalesOrders() {
             <Table>
               <Thead>
                 <Th>Order #</Th>
+                <Th>Reference</Th>
                 <Th>Customer</Th>
                 <Th>Date</Th>
                 <Th>Delivery</Th>
@@ -288,13 +301,16 @@ export default function SalesOrders() {
                     <Tr key={order.id}>
                       <Td>
                         <Link to={`/sales/orders/${order.id}`}>
-                          <span className="font-mono text-xs text-emerald-400 hover:text-emerald-300">
+                          <span className="font-mono text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300">
                             {order.order_number}
                           </span>
                         </Link>
                       </Td>
                       <Td>
-                        <span className="font-medium text-slate-200">{order.customer?.name || '—'}</span>
+                        <span className="font-mono text-xs text-slate-500">{order.reference || '—'}</span>
+                      </Td>
+                      <Td>
+                        <span className="font-medium text-slate-900 dark:text-slate-200">{order.customer?.name || '—'}</span>
                       </Td>
                       <Td>
                         <span className="text-slate-500">{order.order_date}</span>
