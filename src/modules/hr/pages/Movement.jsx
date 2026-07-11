@@ -18,6 +18,7 @@ import {
   MOVEMENT_STATUS,
   MOVEMENT_STATUS_TABS,
 } from '@shared/lib/constants'
+import { submitForApproval } from '@shared/lib/approvalWorkflow'
 
 // ── Apply Modal ───────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ function ApplyModal({ open, onClose, onSaved, employees, myEmployee, isManager }
   }, [open, myEmployee, reset])
 
   const onSubmit = async (data) => {
-    const { error } = await supabase.from('hr_movements').insert({
+    const { data: inserted, error } = await supabase.from('hr_movements').insert({
       tenant_id:     tenantId,
       employee_id:   data.employee_id,
       movement_type: data.movement_type,
@@ -71,8 +72,25 @@ function ApplyModal({ open, onClose, onSaved, employees, myEmployee, isManager }
       status:        'pending',
       created_by:    session?.user?.id || null,
     })
+      .select('id')
+      .single()
     if (error) { toast.error(error.message); return }
-    toast.success('Movement request submitted.')
+
+    let message = 'Movement request submitted.'
+    try {
+      const emp = isManager ? employees.find(e => e.id === data.employee_id) : myEmployee
+      const result = await submitForApproval({
+        tenantId, module: 'hr', recordId: inserted.id, recordType: 'movement',
+        title: `Movement Request${emp ? ` — ${emp.first_name} ${emp.last_name}` : ''}`,
+        description: `${data.movement_type} · ${data.from_date} → ${data.to_date}${data.location ? ` · ${data.location}` : ''} · ${data.reason}`,
+        requestedBy: session?.user?.id || null,
+      })
+      if (result.submitted) message = `Movement submitted for approval (${result.request.request_number}).`
+    } catch (err) {
+      toast.error(err.message)
+    }
+
+    toast.success(message)
     onSaved(); onClose()
   }
 

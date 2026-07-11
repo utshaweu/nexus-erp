@@ -7,12 +7,13 @@ import {
   PageHeader, Badge, Card, Button, Modal, Input, Select,
   Table, Thead, Th, Tbody, Tr, Td, Spinner,
 } from '@shared/components/ui'
-import { CheckCircle, XCircle, Printer, ArrowLeft, FileText, ShoppingCart, Plus, Pencil, Trash2 } from 'lucide-react'
+import { CheckCircle, XCircle, Printer, ArrowLeft, FileText, ShoppingCart, Plus, Pencil, Trash2, Send } from 'lucide-react'
 import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import toast from '@shared/lib/toast'
 import PermissionGate from '@shared/components/PermissionGate'
 import { SALES_ORDER_STATUS as STATUS_BADGE } from '@shared/lib/constants'
+import { findActiveWorkflow, submitForApproval } from '@shared/lib/approvalWorkflow'
 
 const lineSchema = z.object({
   product_name:   z.string().trim().min(1, 'Product name is required'),
@@ -348,6 +349,8 @@ export default function SalesOrderDetail() {
   const [showLineModal, setShowLineModal] = useState(false)
   const [editingLine,   setEditingLine]   = useState(null)
   const [couponInput,   setCouponInput]   = useState('')
+  const [activeWorkflow, setActiveWorkflow] = useState(null)
+  const [pendingRequest, setPendingRequest] = useState(null)
 
   const canEditLines = order && ['draft'].includes(order.status)
 
@@ -375,6 +378,41 @@ export default function SalesOrderDetail() {
   }, [id, tenantId])
 
   useEffect(() => { loadOrder() }, [loadOrder])
+
+  const loadApprovalState = useCallback(async () => {
+    if (!id || !tenantId) return
+    const [wf, { data: pending }] = await Promise.all([
+      findActiveWorkflow(tenantId, 'sales'),
+      supabase
+        .from('approval_requests')
+        .select('id, request_number, status')
+        .eq('tenant_id', tenantId).eq('module', 'sales')
+        .eq('record_type', 'sales_order').eq('record_id', id)
+        .eq('status', 'pending').maybeSingle(),
+    ])
+    setActiveWorkflow(wf)
+    setPendingRequest(pending || null)
+  }, [id, tenantId])
+
+  useEffect(() => { loadApprovalState() }, [loadApprovalState])
+
+  const handleSubmitForApproval = async () => {
+    try {
+      const result = await submitForApproval({
+        tenantId, module: 'sales', recordId: id, recordType: 'sales_order',
+        title: `Sales Order ${order.order_number}`,
+        description: `Customer: ${order.customer?.name || '—'} · ${lines.length} line item(s)`,
+        amount: total, priority: total > 5000 ? 'high' : 'normal',
+        requestedBy: window.__erp_user__?.id,
+      })
+      if (result.submitted) {
+        setPendingRequest(result.request)
+        toast.success(`Submitted for approval as ${result.request.request_number}.`)
+      }
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
 
   // Buy X Get Y: recompute the auto-added free ("gift") lines from the current normal lines
   const reconcileGifts = async () => {
@@ -609,6 +647,14 @@ export default function SalesOrderDetail() {
               </Button>
             </Link>
 
+            {order.status === 'draft' && activeWorkflow && !pendingRequest && (
+              <PermissionGate action="edit" moduleId="sales">
+                <Button variant="outline" size="sm" onClick={handleSubmitForApproval}>
+                  <Send className="w-4 h-4" />Submit for Approval
+                </Button>
+              </PermissionGate>
+            )}
+
             <PermissionGate action="approve" moduleId="sales">
               {order.status === 'draft' && (
                 <Button variant="success" size="sm" onClick={() => updateStatus('confirmed')}>
@@ -773,6 +819,17 @@ export default function SalesOrderDetail() {
                 <span className="text-slate-500">Status</span>
                 <Badge color={s.color}>{s.label}</Badge>
               </div>
+              {pendingRequest && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Approval</span>
+                  <Link
+                    to={`/approval/requests/${pendingRequest.id}`}
+                    className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                  >
+                    {pendingRequest.request_number} · Pending
+                  </Link>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Order Date</span>
                 <span className="text-slate-700 dark:text-slate-300">{order.order_date}</span>

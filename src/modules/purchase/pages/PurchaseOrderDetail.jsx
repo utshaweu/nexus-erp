@@ -13,6 +13,7 @@ import { useTenant } from '@core/tenant/TenantContext'
 import toast from '@shared/lib/toast'
 import PermissionGate from '@shared/components/PermissionGate'
 import { PURCHASE_ORDER_STATUS as STATUS_BADGE } from '@shared/lib/constants'
+import { submitForApproval } from '@shared/lib/approvalWorkflow'
 
 const lineSchema = z.object({
   product_name: z.string().trim().min(1, 'Product name is required'),
@@ -243,14 +244,34 @@ export default function PurchaseOrderDetail() {
   const openEditLine = (l) => { setEditingLine(l); setShowLineModal(true) }
   const closeLineModal = () => { setShowLineModal(false); setEditingLine(null) }
 
-  const updateStatus = async (status) => {
+  const updateStatus = async (status, { silent = false } = {}) => {
     const { error } = await supabase
       .from('purchase_orders')
       .update({ status })
       .eq('id', id)
     if (error) { toast.error(error.message); return }
-    toast.success(`Order marked as ${status}.`)
+    if (!silent) toast.success(`Order marked as ${status}.`)
     setOrder(o => ({ ...o, status }))
+  }
+
+  const handleSubmitForApproval = async () => {
+    try {
+      const result = await submitForApproval({
+        tenantId, module: 'purchase', recordId: id, recordType: 'purchase_order',
+        title: `Purchase Order ${order.order_number}`,
+        description: `Vendor: ${order.vendor?.name || '—'} · ${lines.length} line item(s)`,
+        amount: total, priority: total > 5000 ? 'high' : 'normal',
+        requestedBy: window.__erp_user__?.id,
+      })
+      await updateStatus('pending', { silent: true })
+      toast.success(
+        result.submitted
+          ? `Submitted for approval as ${result.request.request_number}.`
+          : 'Order marked as pending.'
+      )
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   if (loading) {
@@ -298,7 +319,7 @@ export default function PurchaseOrderDetail() {
                   size="sm"
                   disabled={lines.length === 0}
                   title={lines.length === 0 ? 'Add at least one line item first' : undefined}
-                  onClick={() => updateStatus('pending')}
+                  onClick={handleSubmitForApproval}
                 >
                   <Send className="w-4 h-4" />Submit for Approval
                 </Button>

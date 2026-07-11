@@ -13,6 +13,7 @@ import PermissionGate from '@shared/components/PermissionGate'
 import toast from '@shared/lib/toast'
 import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
+import { actOnApprovalRequest } from '@shared/lib/approvalWorkflow'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -261,23 +262,10 @@ export default function ApprovalDetail() {
     setSubmitting(true)
     try {
       const totalSteps = steps.length || 1
-      const { error: actErr } = await supabase.from('approval_actions').insert({
-        tenant_id: tenantId, request_id: id,
-        step_number: request.current_step,
-        action: actionModal.action === 'approve' ? 'approved' : 'rejected',
-        actor_id: userId, comment: comment.trim() || null,
+      await actOnApprovalRequest({
+        tenantId, request, totalSteps,
+        action: actionModal.action, actorId: userId, comment,
       })
-      if (actErr) throw actErr
-
-      let patch = { updated_at: new Date().toISOString() }
-      if (actionModal.action === 'approve') {
-        patch = request.current_step >= totalSteps
-          ? { ...patch, status: 'approved' }
-          : { ...patch, current_step: request.current_step + 1 }
-      } else { patch.status = 'rejected' }
-
-      const { error: updErr } = await supabase.from('approval_requests').update(patch).eq('id', id)
-      if (updErr) throw updErr
 
       toast.success(actionModal.action === 'approve' ? 'Request approved.' : 'Request rejected.')
       closeModal(); fetchData()
