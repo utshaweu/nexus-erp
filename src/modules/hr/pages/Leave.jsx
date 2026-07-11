@@ -17,14 +17,18 @@ import {
   PAGE_SIZE_TABLE as PAGE_SIZE,
   LEAVE_REQUEST_STATUS,
   LEAVE_REQUEST_STATUS_TABS,
+  EMPLOYMENT_TYPES,
 } from '@shared/lib/constants'
+import { submitForApproval } from '@shared/lib/approvalWorkflow'
+import { deductLeaveBalance, refundLeaveBalance } from '@shared/lib/leaveBalances'
 
 // ── Leave Type Modal ──────────────────────────────────────────────────────────
 
 const leaveTypeSchema = z.object({
-  name:         z.string().trim().min(1, 'Name is required'),
-  days_allowed: z.coerce.number().int().min(0, 'Must be 0 or more'),
-  is_paid:      z.boolean(),
+  name:            z.string().trim().min(1, 'Name is required'),
+  days_allowed:    z.coerce.number().int().min(0, 'Must be 0 or more'),
+  employment_type: z.string().min(1, 'Employment type is required'),
+  is_paid:         z.boolean(),
 })
 
 function LeaveTypeModal({ open, onClose, onSaved, leaveType }) {
@@ -34,14 +38,19 @@ function LeaveTypeModal({ open, onClose, onSaved, leaveType }) {
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
     useForm({
       resolver: zodResolver(leaveTypeSchema),
-      defaultValues: { name: '', days_allowed: 0, is_paid: true },
+      defaultValues: { name: '', days_allowed: 0, employment_type: '', is_paid: true },
     })
 
   useEffect(() => {
     if (!open) return
     reset(leaveType
-      ? { name: leaveType.name, days_allowed: leaveType.days_allowed, is_paid: leaveType.is_paid }
-      : { name: '', days_allowed: 0, is_paid: true }
+      ? {
+          name: leaveType.name,
+          days_allowed: leaveType.days_allowed,
+          employment_type: leaveType.employment_type || '',
+          is_paid: leaveType.is_paid,
+        }
+      : { name: '', days_allowed: 0, employment_type: '', is_paid: true }
     )
   }, [open, leaveType, reset])
 
@@ -73,6 +82,12 @@ function LeaveTypeModal({ open, onClose, onSaved, leaveType }) {
           error={errors.days_allowed?.message}
           {...register('days_allowed')}
         />
+        <Select label="Employment Type" error={errors.employment_type?.message} {...register('employment_type')}>
+          <option value="">— Select employment type —</option>
+          {Object.entries(EMPLOYMENT_TYPES).map(([v, l]) => (
+            <option key={v} value={v}>{l}</option>
+          ))}
+        </Select>
         <label className="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" {...register('is_paid')} className="w-4 h-4 rounded accent-pink-500" />
           <span className="text-sm text-slate-700 dark:text-slate-300">Paid leave</span>
@@ -117,7 +132,7 @@ function LeaveRequestModal({ open, onClose, onSaved, employees, leaveTypes }) {
   const { tenantId } = useTenant()
   const session      = useStore(s => s.session)
 
-  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } =
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } =
     useForm({
       resolver: zodResolver(leaveReqSchema),
       defaultValues: {
@@ -134,6 +149,18 @@ function LeaveRequestModal({ open, onClose, onSaved, employees, leaveTypes }) {
     ? countWeekdays(startDate, endDate)
     : 0
 
+  const employeeId = watch('employee_id')
+  const selectedEmployee = employees.find(e => e.id === employeeId)
+  const availableLeaveTypes = selectedEmployee
+    ? leaveTypes.filter(t => t.is_active && t.employment_type === selectedEmployee.employment_type)
+    : []
+
+  // Leave type options depend on the selected employee's employment type —
+  // clear any prior selection when the employee changes so a stale/invalid pick can't be submitted.
+  useEffect(() => {
+    setValue('leave_type_id', '')
+  }, [employeeId, setValue])
+
   useEffect(() => {
     if (!open) return
     reset({
@@ -145,7 +172,7 @@ function LeaveRequestModal({ open, onClose, onSaved, employees, leaveTypes }) {
   }, [open, reset])
 
   const onSubmit = async (data) => {
-    const { error } = await supabase
+    const { data: inserted, error } = await supabase
       .from('hr_leave_requests')
       .insert({
         tenant_id:     tenantId,
@@ -158,8 +185,26 @@ function LeaveRequestModal({ open, onClose, onSaved, employees, leaveTypes }) {
         status:        'pending',
         created_by:    session?.user?.id || null,
       })
+      .select('id')
+      .single()
     if (error) { toast.error(error.message); return }
-    toast.success('Leave request submitted.')
+
+    let message = 'Leave request submitted.'
+    try {
+      const emp  = employees.find(e => e.id === data.employee_id)
+      const type = leaveTypes.find(t => t.id === data.leave_type_id)
+      const result = await submitForApproval({
+        tenantId, module: 'hr', recordId: inserted.id, recordType: 'leave_request',
+        title: `Leave Request${emp ? ` — ${emp.first_name} ${emp.last_name}` : ''}`,
+        description: `${type?.name || 'Leave'} · ${data.start_date} → ${data.end_date} (${days} day${days !== 1 ? 's' : ''})${data.reason ? ` · ${data.reason}` : ''}`,
+        requestedBy: session?.user?.id || null,
+      })
+      if (result.submitted) message = `Leave request submitted for approval (${result.request.request_number}).`
+    } catch (err) {
+      toast.error(err.message)
+    }
+
+    toast.success(message)
     onSaved(); onClose()
   }
 
@@ -172,12 +217,24 @@ function LeaveRequestModal({ open, onClose, onSaved, employees, leaveTypes }) {
             <option key={e.id} value={e.id}>{e.first_name} {e.last_name} ({e.employee_number})</option>
           ))}
         </Select>
-        <Select label="Leave Type" error={errors.leave_type_id?.message} {...register('leave_type_id')}>
-          <option value="">— Select type —</option>
-          {leaveTypes.filter(t => t.is_active).map(t => (
+        <Select
+          label="Leave Type"
+          error={errors.leave_type_id?.message}
+          disabled={!selectedEmployee}
+          {...register('leave_type_id')}
+        >
+          <option value="">
+            {selectedEmployee ? '— Select type —' : '— Select employee first —'}
+          </option>
+          {availableLeaveTypes.map(t => (
             <option key={t.id} value={t.id}>{t.name} ({t.days_allowed} days/yr, {t.is_paid ? 'Paid' : 'Unpaid'})</option>
           ))}
         </Select>
+        {selectedEmployee && availableLeaveTypes.length === 0 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 -mt-2">
+            No active leave types configured for {EMPLOYMENT_TYPES[selectedEmployee.employment_type] || selectedEmployee.employment_type} employees.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Start Date"
@@ -271,12 +328,13 @@ function LeaveTypesSection({ leaveTypes, onRefresh }) {
         <div className="py-8 text-center text-sm text-slate-500">No leave types yet.</div>
       ) : (
         <Table>
-          <Thead><Th>Name</Th><Th>Days/Year</Th><Th>Paid</Th><Th>Status</Th><Th></Th></Thead>
+          <Thead><Th>Name</Th><Th>Days/Year</Th><Th>Employment Type</Th><Th>Paid</Th><Th>Status</Th><Th></Th></Thead>
           <Tbody>
             {leaveTypes.map(t => (
               <Tr key={t.id}>
                 <Td><span className="font-medium text-slate-900 dark:text-slate-100">{t.name}</span></Td>
                 <Td><span className="text-slate-600 dark:text-slate-400">{t.days_allowed}</span></Td>
+                <Td><span className="text-slate-600 dark:text-slate-400">{EMPLOYMENT_TYPES[t.employment_type] || t.employment_type || '—'}</span></Td>
                 <Td>
                   <Badge color={t.is_paid ? 'green' : 'default'}>{t.is_paid ? 'Paid' : 'Unpaid'}</Badge>
                 </Td>
@@ -313,38 +371,6 @@ function LeaveTypesSection({ leaveTypes, onRefresh }) {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-
-const currentYear = new Date().getFullYear()
-
-async function deductLeaveBalance(tenantId, employeeId, leaveTypeId, days, leaveTypes) {
-  const { data: existing } = await supabase
-    .from('hr_leave_balances').select('*')
-    .eq('employee_id', employeeId).eq('leave_type_id', leaveTypeId).eq('year', currentYear)
-    .maybeSingle()
-  if (existing) {
-    await supabase.from('hr_leave_balances')
-      .update({ used_days: parseFloat(existing.used_days) + days, updated_at: new Date().toISOString() })
-      .eq('id', existing.id)
-  } else {
-    const type = leaveTypes.find(t => t.id === leaveTypeId)
-    await supabase.from('hr_leave_balances').insert({
-      tenant_id: tenantId, employee_id: employeeId, leave_type_id: leaveTypeId,
-      year: currentYear, total_days: type?.days_allowed || 0, used_days: days,
-    })
-  }
-}
-
-async function refundLeaveBalance(employeeId, leaveTypeId, days) {
-  const { data: existing } = await supabase
-    .from('hr_leave_balances').select('*')
-    .eq('employee_id', employeeId).eq('leave_type_id', leaveTypeId).eq('year', currentYear)
-    .maybeSingle()
-  if (existing) {
-    await supabase.from('hr_leave_balances')
-      .update({ used_days: Math.max(0, parseFloat(existing.used_days) - days), updated_at: new Date().toISOString() })
-      .eq('id', existing.id)
-  }
-}
 
 export default function Leave() {
   const { tenantId, isManager } = useTenant()
@@ -412,7 +438,7 @@ export default function Leave() {
     if (!tenantId) return
     const { data } = await supabase
       .from('hr_employees')
-      .select('id, first_name, last_name, employee_number')
+      .select('id, first_name, last_name, employee_number, employment_type')
       .eq('tenant_id', tenantId)
       .in('status', ['active', 'on_leave'])
       .order('first_name')
@@ -442,7 +468,7 @@ export default function Leave() {
       .eq('id', req.id)
     if (error) { toast.error(error.message); return }
 
-    await deductLeaveBalance(tenantId, req.employee_id, req.leave_type_id, req.days_count, leaveTypes)
+    await deductLeaveBalance(tenantId, req.employee_id, req.leave_type_id, req.days_count)
 
     if (req.start_date <= new Date().toISOString().slice(0, 10)) {
       await supabase.from('hr_employees')

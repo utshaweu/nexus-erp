@@ -11,6 +11,7 @@ import toast from '@shared/lib/toast'
 import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import { PAGE_SIZE_TABLE as PAGE_SIZE } from '@shared/lib/constants'
+import { actOnApprovalRequest } from '@shared/lib/approvalWorkflow'
 
 const PRIORITY = {
   low:    { label: 'Low',    color: 'default' },
@@ -88,7 +89,10 @@ export default function PendingApprovals() {
   useEffect(() => { setPage(1) }, [search, priorityFilter, moduleFilter])
 
   const openAction = (req, action) => {
-    setActionModal({ id: req.id, action, title: req.title, workflowId: req.workflow_id, currentStep: req.current_step })
+    setActionModal({
+      id: req.id, action, title: req.title, workflowId: req.workflow_id, currentStep: req.current_step,
+      module: req.module, recordId: req.record_id, recordType: req.record_type,
+    })
     setComment('')
   }
   const closeModal = () => { setActionModal(null); setComment('') }
@@ -108,23 +112,15 @@ export default function PendingApprovals() {
           .eq('workflow_id', actionModal.workflowId)
         totalSteps = count || 1
       }
-      const { error: actErr } = await supabase.from('approval_actions').insert({
-        tenant_id: tenantId, request_id: actionModal.id,
-        step_number: actionModal.currentStep,
-        action: actionModal.action === 'approve' ? 'approved' : 'rejected',
-        actor_id: userId, comment: comment.trim() || null,
+
+      await actOnApprovalRequest({
+        tenantId,
+        request: {
+          id: actionModal.id, current_step: actionModal.currentStep,
+          module: actionModal.module, record_id: actionModal.recordId, record_type: actionModal.recordType,
+        },
+        totalSteps, action: actionModal.action, actorId: userId, comment,
       })
-      if (actErr) throw actErr
-
-      let patch = { updated_at: new Date().toISOString() }
-      if (actionModal.action === 'approve') {
-        patch = actionModal.currentStep >= totalSteps
-          ? { ...patch, status: 'approved' }
-          : { ...patch, current_step: actionModal.currentStep + 1 }
-      } else { patch.status = 'rejected' }
-
-      const { error: updErr } = await supabase.from('approval_requests').update(patch).eq('id', actionModal.id)
-      if (updErr) throw updErr
 
       toast.success(actionModal.action === 'approve' ? 'Request approved.' : 'Request rejected.')
       closeModal(); fetchRequests()
