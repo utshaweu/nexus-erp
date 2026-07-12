@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Search, Pencil, Trash2, Receipt, PlusCircle, Minus } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Receipt, PlusCircle, Minus, Send } from 'lucide-react'
 import {
   Button, Badge, Table, Thead, Th, Tbody, Tr, Td, PageHeader, Card,
   Modal, Input, Select,
@@ -17,6 +18,7 @@ import {
   BILL_STATUS,
   BILL_STATUS_TABS,
 } from '@shared/lib/constants'
+import { findActiveWorkflow, submitForApproval } from '@shared/lib/approvalWorkflow'
 
 // ── Validation ────────────────────────────────────────────────────────────────
 
@@ -322,6 +324,8 @@ export default function Bills() {
   const [loading,      setLoading]      = useState(true)
   const [showModal,    setShowModal]    = useState(false)
   const [editBill,     setEditBill]     = useState(null)
+  const [workflow,       setWorkflow]       = useState(null)
+  const [pendingByBill,  setPendingByBill]  = useState({})
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
@@ -343,12 +347,48 @@ export default function Bills() {
       if (error) throw error
       setBills(data || [])
       setTotal(count || 0)
+
+      const draftIds = (data || []).filter(b => b.status === 'draft').map(b => b.id)
+      if (draftIds.length) {
+        const { data: pending } = await supabase
+          .from('approval_requests')
+          .select('id, request_number, record_id')
+          .eq('tenant_id', tenantId).eq('module', 'accounts')
+          .eq('record_type', 'bill').eq('status', 'pending')
+          .in('record_id', draftIds)
+        setPendingByBill(Object.fromEntries((pending || []).map(p => [p.record_id, p])))
+      } else {
+        setPendingByBill({})
+      }
     } catch (err) {
       toast.error(err.message)
     } finally {
       setLoading(false)
     }
   }, [tenantId, page, search, statusFilter])
+
+  useEffect(() => {
+    if (!tenantId) return
+    findActiveWorkflow(tenantId, 'accounts').then(setWorkflow)
+  }, [tenantId])
+
+  const handleSubmitForApproval = async (bill) => {
+    try {
+      const result = await submitForApproval({
+        tenantId, module: 'accounts', recordId: bill.id, recordType: 'bill',
+        title: `Bill ${bill.bill_number}`,
+        description: `Vendor: ${bill.vendor?.name || '—'} · Total $${fmt(bill.total_amount)}`,
+        amount: bill.total_amount, priority: Number(bill.total_amount) > 5000 ? 'high' : 'normal',
+        requestedBy: window.__erp_user__?.id,
+      })
+      if (result.submitted) {
+        setPendingByBill(prev => ({ ...prev, [bill.id]: result.request }))
+        toast.success(`Submitted for approval as ${result.request.request_number}.`)
+      }
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
 
   const fetchVendors = useCallback(async () => {
     if (!tenantId) return
@@ -522,12 +562,30 @@ export default function Bills() {
                     </span>
                   </Td>
                   <Td>
-                    <Badge color={BILL_STATUS[b.status]?.color || 'default'}>
-                      {BILL_STATUS[b.status]?.label || b.status}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge color={BILL_STATUS[b.status]?.color || 'default'}>
+                        {BILL_STATUS[b.status]?.label || b.status}
+                      </Badge>
+                      {pendingByBill[b.id] && (
+                        <Link
+                          to={`/approval/requests/${pendingByBill[b.id].id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                        >
+                          {pendingByBill[b.id].request_number} · Pending
+                        </Link>
+                      )}
+                    </div>
                   </Td>
                   <Td onClick={e => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
+                      {b.status === 'draft' && workflow && !pendingByBill[b.id] && (
+                        <PermissionGate action="edit" moduleId="accounts">
+                          <Button variant="ghost" size="xs" onClick={() => handleSubmitForApproval(b)} title="Submit for Approval">
+                            <Send className="w-3.5 h-3.5" />
+                          </Button>
+                        </PermissionGate>
+                      )}
                       <PermissionGate action="edit" moduleId="accounts">
                         <Button variant="ghost" size="xs" onClick={() => openEdit(b)}>
                           <Pencil className="w-3.5 h-3.5" />

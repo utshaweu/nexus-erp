@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -23,6 +23,7 @@ import {
   MAINTENANCE_STATUS,
   ASSET_PRODUCT_CATEGORY,
 } from '@shared/lib/constants'
+import { findActiveWorkflow, submitForApproval } from '@shared/lib/approvalWorkflow'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -252,6 +253,7 @@ const disposeSchema = z.object({
 })
 
 function DisposeModal({ open, onClose, onSaved, asset }) {
+  const { tenantId } = useTenant()
   const {
     register, handleSubmit, reset,
     formState: { errors, isSubmitting },
@@ -263,22 +265,50 @@ function DisposeModal({ open, onClose, onSaved, asset }) {
   useEffect(() => { if (open) reset({ disposal_date: new Date().toISOString().slice(0, 10), disposal_amount: 0, notes: '' }) }, [open, reset])
 
   const onSubmit = async (data) => {
-    const { error } = await supabase.from('assets').update({
-      status:          'disposed',
+    const disposalFields = {
       disposal_date:   data.disposal_date,
       disposal_amount: parseFloat(data.disposal_amount),
       notes:           data.notes || null,
       updated_at:      new Date().toISOString(),
-    }).eq('id', asset.id)
+    }
 
-    if (error) { toast.error(error.message); return }
+    let submitted = false
+    try {
+      const workflow = await findActiveWorkflow(tenantId, 'assets')
+      if (workflow) {
+        // Stage the proposed disposal details now; the outcome handler flips status once approved.
+        const { error: stageErr } = await supabase.from('assets').update(disposalFields).eq('id', asset.id)
+        if (stageErr) { toast.error(stageErr.message); return }
 
-    await supabase.from('asset_depreciation_schedules')
-      .update({ status: 'cancelled' })
-      .eq('asset_id', asset.id)
-      .eq('status', 'scheduled')
+        const result = await submitForApproval({
+          tenantId, module: 'assets', recordId: asset.id, recordType: 'asset_disposal',
+          title: `Dispose Asset — ${asset.name}`,
+          description: `${asset.asset_number} · Disposal date ${data.disposal_date} · Amount $${fmt(data.disposal_amount)}${data.notes ? ` · ${data.notes}` : ''}`,
+          amount: disposalFields.disposal_amount, priority: 'normal',
+          requestedBy: window.__erp_user__?.id,
+        })
+        submitted = result.submitted
+      }
+    } catch (err) {
+      toast.error(err.message)
+    }
 
-    toast.success('Asset disposed.')
+    if (!submitted) {
+      const { error } = await supabase.from('assets')
+        .update({ ...disposalFields, status: 'disposed' })
+        .eq('id', asset.id)
+      if (error) { toast.error(error.message); return }
+
+      await supabase.from('asset_depreciation_schedules')
+        .update({ status: 'cancelled' })
+        .eq('asset_id', asset.id)
+        .eq('status', 'scheduled')
+
+      toast.success('Asset disposed.')
+    } else {
+      toast.success('Disposal request submitted for approval.')
+    }
+
     onSaved(); onClose()
   }
 
@@ -352,6 +382,7 @@ export default function AssetDetail() {
   const [activeTab,   setActiveTab]   = useState('overview')
   const [showEdit,    setShowEdit]    = useState(false)
   const [showDispose, setShowDispose] = useState(false)
+  const [pendingDisposal, setPendingDisposal] = useState(null)
 
   const fetchAsset = useCallback(async () => {
     if (!id) return
@@ -408,9 +439,21 @@ export default function AssetDetail() {
     setAssetProducts(data || [])
   }, [tenantId])
 
+  const fetchPendingDisposal = useCallback(async () => {
+    if (!id || !tenantId) return
+    const { data } = await supabase
+      .from('approval_requests')
+      .select('id, request_number')
+      .eq('tenant_id', tenantId).eq('module', 'assets')
+      .eq('record_type', 'asset_disposal').eq('record_id', id)
+      .eq('status', 'pending').maybeSingle()
+    setPendingDisposal(data || null)
+  }, [id, tenantId])
+
   useEffect(() => { fetchAsset() },         [fetchAsset])
   useEffect(() => { fetchCategories() },    [fetchCategories])
   useEffect(() => { fetchAssetProducts() }, [fetchAssetProducts])
+  useEffect(() => { fetchPendingDisposal() }, [fetchPendingDisposal])
 
   if (loading) {
     return (
@@ -461,6 +504,14 @@ export default function AssetDetail() {
               {asset.name}
             </h1>
             <Badge color={statusInfo.color}>{statusInfo.label}</Badge>
+            {pendingDisposal && (
+              <Link
+                to={`/approval/requests/${pendingDisposal.id}`}
+                className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
+              >
+                {pendingDisposal.request_number} · Disposal Pending
+              </Link>
+            )}
           </div>
           {asset.asset_categories?.name && (
             <p className="text-sm text-slate-500 mt-0.5">{asset.asset_categories.name}</p>
@@ -475,11 +526,13 @@ export default function AssetDetail() {
                   <Pencil className="w-4 h-4" />Edit
                 </Button>
               </PermissionGate>
-              <PermissionGate action="edit" moduleId="assets">
-                <Button variant="danger" size="sm" onClick={() => setShowDispose(true)}>
-                  <Trash2 className="w-4 h-4" />Dispose
-                </Button>
-              </PermissionGate>
+              {!pendingDisposal && (
+                <PermissionGate action="edit" moduleId="assets">
+                  <Button variant="danger" size="sm" onClick={() => setShowDispose(true)}>
+                    <Trash2 className="w-4 h-4" />Dispose
+                  </Button>
+                </PermissionGate>
+              )}
             </>
           )}
         </div>
@@ -706,7 +759,7 @@ export default function AssetDetail() {
       <DisposeModal
         open={showDispose}
         onClose={() => setShowDispose(false)}
-        onSaved={fetchAsset}
+        onSaved={() => { fetchAsset(); fetchPendingDisposal() }}
         asset={asset}
       />
     </div>
