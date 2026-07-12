@@ -22,6 +22,21 @@ import { deductLeaveBalance } from './leaveBalances'
 const RECORD_STATUS_TARGETS = {
   purchase_order: { table: 'purchase_orders', approved: 'approved',   rejected: 'cancelled' },
   sales_order:    { table: 'sales_orders',    approved: 'confirmed',  rejected: 'cancelled' },
+  bill:           { table: 'bills',           approved: 'posted',     rejected: 'cancelled' },
+}
+
+async function applyAssetDisposalOutcome({ recordId, outcome }) {
+  const now = new Date().toISOString()
+  if (outcome === 'approved') {
+    await supabase.from('assets').update({ status: 'disposed', updated_at: now }).eq('id', recordId)
+    await supabase.from('asset_depreciation_schedules')
+      .update({ status: 'cancelled' }).eq('asset_id', recordId).eq('status', 'scheduled')
+  } else {
+    // Disposal was rejected — clear the proposed disposal fields the submitter staged, asset stays active.
+    await supabase.from('assets')
+      .update({ disposal_date: null, disposal_amount: null, updated_at: now })
+      .eq('id', recordId)
+  }
 }
 
 async function applyMovementOutcome({ recordId, outcome, actorId, comment }) {
@@ -114,6 +129,8 @@ export async function applyApprovalOutcome({ tenantId, module, recordType, recor
     await applyLeaveRequestOutcome({ recordId, outcome, actorId, comment })
   } else if (recordType === 'movement') {
     await applyMovementOutcome({ recordId, outcome, actorId, comment })
+  } else if (recordType === 'asset_disposal') {
+    await applyAssetDisposalOutcome({ recordId, outcome })
   } else {
     const target = RECORD_STATUS_TARGETS[recordType]
     const status = target?.[outcome]

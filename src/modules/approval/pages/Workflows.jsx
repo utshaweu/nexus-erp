@@ -5,32 +5,33 @@ import { z } from 'zod'
 import {
   GitBranch, Plus, Settings, Users, ArrowRight, Trash2,
   ToggleLeft, ToggleRight, GripVertical, CheckCircle2,
-  ShoppingCart, UserCheck, Package, DollarSign, Zap,
+  Package, Zap,
 } from 'lucide-react'
 import { Button, Badge, PageHeader, Card, Modal, Input, Select, Spinner } from '@shared/components/ui'
 import PermissionGate from '@shared/components/PermissionGate'
 import toast from '@shared/lib/toast'
 import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
+import { useModule } from '@shared/hooks/useModule'
+import registry from '@core/registry/ModuleRegistry'
 import { clsx } from 'clsx'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const MODULE_META = {
-  purchase: { label: 'Purchase',  color: '#f59e0b', bg: 'bg-amber-50  dark:bg-amber-500/10',  text: 'text-amber-600  dark:text-amber-400',  Icon: ShoppingCart },
-  hr:       { label: 'HR',        color: '#ec4899', bg: 'bg-pink-50   dark:bg-pink-500/10',   text: 'text-pink-600   dark:text-pink-400',   Icon: UserCheck    },
-  assets:   { label: 'Assets',    color: '#f97316', bg: 'bg-orange-50 dark:bg-orange-500/10', text: 'text-orange-600 dark:text-orange-400', Icon: Package      },
-  sales:    { label: 'Sales',     color: '#10b981', bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', Icon: DollarSign },
-  accounts: { label: 'Accounts',  color: '#6366f1', bg: 'bg-indigo-50 dark:bg-indigo-500/10', text: 'text-indigo-600 dark:text-indigo-400', Icon: DollarSign  },
-}
+const DEFAULT_MODULE_COLOR = '#64748b'
 
-const MODULE_OPTIONS = [
-  { value: 'purchase', label: 'Purchase' },
-  { value: 'sales',    label: 'Sales'    },
-  { value: 'hr',       label: 'HR'       },
-  { value: 'assets',   label: 'Assets'   },
-  { value: 'accounts', label: 'Accounts' },
-]
+// Resolves display metadata (label/color/icon) for a module id from the live
+// registry, so it stays in sync with whatever modules are installed rather
+// than a hardcoded list. Falls back gracefully if a workflow references a
+// module that has since been uninstalled.
+function getModuleMeta(moduleId) {
+  const manifest = registry.get(moduleId)
+  return {
+    label: manifest?.name || moduleId || 'Unknown',
+    color: manifest?.color || DEFAULT_MODULE_COLOR,
+    Icon:  manifest?.icon || Package,
+  }
+}
 
 const ROLE_OPTIONS = [
   { value: 'owner',   label: 'Owner'   },
@@ -44,6 +45,7 @@ const TEMPLATES = [
   {
     name: 'Purchase Order Approval',
     module: 'purchase',
+    feature: '/purchase/orders',
     trigger: 'Amount > $5,000',
     steps: [
       { step_name: 'Department Manager', approver_role: 'manager', approval_type: 'any' },
@@ -54,6 +56,7 @@ const TEMPLATES = [
   {
     name: 'Leave Request',
     module: 'hr',
+    feature: '/hr/leave',
     trigger: 'All leave requests',
     steps: [
       { step_name: 'Line Manager',  approver_role: 'manager', approval_type: 'any' },
@@ -63,6 +66,7 @@ const TEMPLATES = [
   {
     name: 'Asset Disposal',
     module: 'assets',
+    feature: '/assets/list',
     trigger: 'Asset disposal request',
     steps: [
       { step_name: 'Asset Manager',    approver_role: 'manager', approval_type: 'any' },
@@ -73,6 +77,7 @@ const TEMPLATES = [
   {
     name: 'Sales Discount > 20%',
     module: 'sales',
+    feature: '/sales/offers',
     trigger: 'Discount exceeds 20%',
     steps: [
       { step_name: 'Sales Manager', approver_role: 'manager', approval_type: 'any' },
@@ -91,6 +96,7 @@ const stepSchema = z.object({
 const workflowSchema = z.object({
   name:              z.string().trim().min(1, 'Workflow name is required'),
   module:            z.string().min(1, 'Module is required'),
+  feature:           z.string().trim().min(1, 'Feature is required'),
   trigger_condition: z.string().trim().min(1, 'Trigger condition is required'),
   steps:             z.array(stepSchema).min(1, 'At least one approval step is required'),
 })
@@ -144,7 +150,7 @@ function EmptyStateWithTemplates({ onCreate, onUseTemplate }) {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {TEMPLATES.map(tpl => {
-            const meta = MODULE_META[tpl.module] || MODULE_META.purchase
+            const meta = getModuleMeta(tpl.module)
             const { Icon } = meta
             return (
               <div
@@ -155,8 +161,8 @@ function EmptyStateWithTemplates({ onCreate, onUseTemplate }) {
                 {/* Top accent bar */}
                 <div className="h-1 w-full" style={{ backgroundColor: meta.color }} />
                 <div className="p-4">
-                  <div className={clsx('inline-flex items-center justify-center w-9 h-9 rounded-lg mb-3', meta.bg)}>
-                    <Icon className={clsx('w-4 h-4', meta.text)} />
+                  <div className="inline-flex items-center justify-center w-9 h-9 rounded-lg mb-3" style={{ backgroundColor: `${meta.color}18` }}>
+                    <Icon className="w-4 h-4" style={{ color: meta.color }} />
                   </div>
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1 leading-tight">{tpl.name}</p>
                   <p className="text-xs text-slate-500 mb-3">{tpl.trigger}</p>
@@ -187,7 +193,7 @@ function EmptyStateWithTemplates({ onCreate, onUseTemplate }) {
 // ── Workflow Card ─────────────────────────────────────────────────────────────
 
 function WorkflowCard({ workflow, onEdit, onToggle, onDelete }) {
-  const meta  = MODULE_META[workflow.module] || MODULE_META.purchase
+  const meta  = getModuleMeta(workflow.module)
   const steps = workflow.steps || []
   const { Icon } = meta
 
@@ -200,13 +206,21 @@ function WorkflowCard({ workflow, onEdit, onToggle, onDelete }) {
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-start gap-3">
-            <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', meta.bg)}>
-              <Icon className={clsx('w-5 h-5', meta.text)} />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${meta.color}18` }}>
+              <Icon className="w-5 h-5" style={{ color: meta.color }} />
             </div>
             <div>
               <h3 className="font-semibold text-slate-800 dark:text-slate-100 leading-tight">{workflow.name}</h3>
               {workflow.trigger_condition && (
                 <p className="text-xs text-slate-500 mt-0.5">{workflow.trigger_condition}</p>
+              )}
+              {workflow.feature && (
+                <span
+                  className="inline-block mt-1 text-xs px-1.5 py-0.5 rounded font-medium"
+                  style={{ backgroundColor: `${meta.color}15`, color: meta.color }}
+                >
+                  {registry.get(workflow.module)?.menuItems?.find(mi => mi.path === workflow.feature)?.label || workflow.feature}
+                </span>
               )}
             </div>
           </div>
@@ -295,12 +309,29 @@ function WorkflowCard({ workflow, onEdit, onToggle, onDelete }) {
 
 // ── Step Row in modal ─────────────────────────────────────────────────────────
 
-function StepRow({ index, field, register, errors, onRemove, canRemove, tenantUsers }) {
-  const meta = MODULE_META.purchase // default color for step numbers
+function StepRow({
+  index, field, register, errors, onRemove, canRemove, tenantUsers,
+  onDragStart, onDragOver, onDrop, onDragEnd, isDragging,
+}) {
   return (
-    <div className="flex items-start gap-3 p-3 rounded-xl bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={clsx(
+        'flex items-start gap-3 p-3 rounded-xl bg-surface-50 dark:bg-surface-900 border transition-opacity',
+        isDragging ? 'border-brand-400 dark:border-brand-500 opacity-40' : 'border-surface-200 dark:border-surface-700',
+      )}
+    >
       <div className="flex flex-col items-center gap-1 pt-1 flex-shrink-0">
-        <GripVertical className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+        <div
+          draggable
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          title="Drag to reorder"
+          className="cursor-grab active:cursor-grabbing touch-none p-0.5 -m-0.5 rounded hover:bg-surface-200 dark:hover:bg-surface-700"
+        >
+          <GripVertical className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+        </div>
         <div className="w-5 h-5 rounded-full bg-brand-50 dark:bg-brand-500/15 border border-brand-200 dark:border-brand-500/30 flex items-center justify-center">
           <span className="text-xs font-bold text-brand-600 dark:text-brand-400">{index + 1}</span>
         </div>
@@ -367,16 +398,37 @@ function StepRow({ index, field, register, errors, onRemove, canRemove, tenantUs
 function WorkflowModal({ open, onClose, onSaved, tenantId, workflow, prefill }) {
   const isEdit = Boolean(workflow)
   const [tenantUsers, setTenantUsers] = useState([])
+  const [dragIndex, setDragIndex] = useState(null)
+  const { installedModules } = useModule()
+
+  const moduleOptions = installedModules
+    .filter(m => m.id !== 'approval')
+    .map(m => ({ value: m.id, label: m.name || m.id }))
 
   const {
-    register, handleSubmit, reset, control,
+    register, handleSubmit, reset, control, watch, setValue,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(workflowSchema),
-    defaultValues: { name: '', module: '', trigger_condition: '', steps: [DEFAULT_STEP] },
+    defaultValues: { name: '', module: '', feature: '', trigger_condition: '', steps: [DEFAULT_STEP] },
   })
 
-  const { fields, append, remove } = useFieldArray({ control, name: 'steps' })
+  const { fields, append, remove, move } = useFieldArray({ control, name: 'steps' })
+
+  // Feature options cascade from the selected module's own menu items, so the
+  // list always matches whatever pages that module actually exposes.
+  const selectedModule = watch('module')
+  const featureOptions = selectedModule
+    ? (registry.get(selectedModule)?.menuItems || [])
+        .map(mi => ({ value: mi.path, label: mi.label }))
+    : []
+  const moduleFieldReg = register('module')
+
+  const handleStepDrop = (dropIndex) => {
+    if (dragIndex === null || dragIndex === dropIndex) { setDragIndex(null); return }
+    move(dragIndex, dropIndex)
+    setDragIndex(null)
+  }
 
   useEffect(() => {
     if (!open || !tenantId) return
@@ -391,16 +443,19 @@ function WorkflowModal({ open, onClose, onSaved, tenantId, workflow, prefill }) 
     if (!open) return
     if (prefill) {
       reset({
-        name: prefill.name, module: prefill.module,
+        name: prefill.name, module: prefill.module, feature: prefill.feature || '',
         trigger_condition: prefill.trigger, steps: prefill.steps,
       })
     } else if (isEdit && workflow) {
       const steps = (workflow.steps || []).map(s => ({
         step_name: s.step_name, approver_role: s.approver_role, approval_type: s.approval_type || 'any',
       }))
-      reset({ name: workflow.name, module: workflow.module, trigger_condition: workflow.trigger_condition || '', steps: steps.length > 0 ? steps : [DEFAULT_STEP] })
+      reset({
+        name: workflow.name, module: workflow.module, feature: workflow.feature || '',
+        trigger_condition: workflow.trigger_condition || '', steps: steps.length > 0 ? steps : [DEFAULT_STEP],
+      })
     } else {
-      reset({ name: '', module: '', trigger_condition: '', steps: [DEFAULT_STEP] })
+      reset({ name: '', module: '', feature: '', trigger_condition: '', steps: [DEFAULT_STEP] })
     }
   }, [open, isEdit, workflow, prefill, reset])
 
@@ -409,14 +464,15 @@ function WorkflowModal({ open, onClose, onSaved, tenantId, workflow, prefill }) 
       let workflowId = workflow?.id
       if (isEdit) {
         const { error } = await supabase.from('approval_workflows').update({
-          name: data.name, module: data.module, trigger_condition: data.trigger_condition,
+          name: data.name, module: data.module, feature: data.feature,
+          trigger_condition: data.trigger_condition,
           updated_at: new Date().toISOString(),
         }).eq('id', workflowId)
         if (error) throw error
         await supabase.from('approval_workflow_steps').delete().eq('workflow_id', workflowId)
       } else {
         const { data: wf, error } = await supabase.from('approval_workflows').insert({
-          tenant_id: tenantId, name: data.name, module: data.module,
+          tenant_id: tenantId, name: data.name, module: data.module, feature: data.feature,
           trigger_condition: data.trigger_condition, is_active: true,
         }).select('id').single()
         if (error) throw error
@@ -448,13 +504,29 @@ function WorkflowModal({ open, onClose, onSaved, tenantId, workflow, prefill }) 
               <Input label="Workflow Name" placeholder="e.g. Purchase Order Approval" error={errors.name?.message} {...register('name')} />
             </div>
             <div>
-              <Select label="Module" {...register('module')}>
+              <Select
+                label="Module"
+                {...moduleFieldReg}
+                onChange={(e) => { moduleFieldReg.onChange(e); setValue('feature', '') }}
+              >
                 <option value="">Select module...</option>
-                {MODULE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {moduleOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </Select>
               {errors.module && <p className="mt-1 text-xs text-red-500">{errors.module.message}</p>}
+              {moduleOptions.length === 0 && (
+                <p className="mt-1 text-xs text-slate-400">No modules installed yet — install one from the App Store first.</p>
+              )}
             </div>
-            <Input label="Trigger Condition" placeholder="e.g. Amount > $5,000" error={errors.trigger_condition?.message} {...register('trigger_condition')} />
+            <div>
+              <Select label="Feature" disabled={!selectedModule} {...register('feature')}>
+                <option value="">{selectedModule ? 'Select feature...' : 'Select a module first'}</option>
+                {featureOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </Select>
+              {errors.feature && <p className="mt-1 text-xs text-red-500">{errors.feature.message}</p>}
+            </div>
+            <div className="col-span-2">
+              <Input label="Trigger Condition" placeholder="e.g. Amount > $5,000" error={errors.trigger_condition?.message} {...register('trigger_condition')} />
+            </div>
           </div>
 
           {/* Steps */}
@@ -490,6 +562,11 @@ function WorkflowModal({ open, onClose, onSaved, tenantId, workflow, prefill }) 
                   register={register} errors={errors}
                   onRemove={() => remove(i)} canRemove={fields.length > 1}
                   tenantUsers={tenantUsers}
+                  isDragging={dragIndex === i}
+                  onDragStart={() => setDragIndex(i)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); handleStepDrop(i) }}
+                  onDragEnd={() => setDragIndex(null)}
                 />
               ))}
             </div>
