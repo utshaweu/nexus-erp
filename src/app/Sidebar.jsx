@@ -79,8 +79,8 @@ function ModuleSection({ manifest, canFn }) {
   // Filter visible menu items using the permission function from context
   const visibleItems = (manifest.menuItems ?? []).filter(item => {
     if (!item.requiredPermission) return true
-    const { action, moduleId } = item.requiredPermission
-    return canFn(action, moduleId)
+    const { action, moduleId, featureId } = item.requiredPermission
+    return canFn(action, moduleId, featureId)
   })
 
   // Hide the whole section if nothing is visible
