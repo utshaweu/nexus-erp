@@ -32,22 +32,23 @@ function AdminRoute({ children }) {
 /**
  * PermissionRoute
  * ───────────────
- * Wraps a module page route. Checks can(VIEW, moduleId) before
+ * Wraps a module page route. Checks can(VIEW, moduleId, featureId) before
  * rendering. If the user has no view permission, redirects to /
  * instead of showing a blank or error page.
  *
  * Every module route automatically gets this guard — no per-page
- * code needed. The moduleId is passed from the manifest route config.
+ * code needed. moduleId/featureId are derived from the manifest's
+ * menuItems so typing a hidden feature's URL directly is also blocked.
  */
-function PermissionRoute({ moduleId, children }) {
+function PermissionRoute({ moduleId, featureId, children }) {
   const { can } = usePermissions()
 
   // Super admins always pass
   const user = window.__erp_user__
   if (user?.isSuperAdmin) return children
 
-  // Must be able to VIEW the module to access any of its pages
-  if (!can(ACTIONS.VIEW, moduleId)) {
+  // Must be able to VIEW the module (and feature, if scoped) to access this page
+  if (!can(ACTIONS.VIEW, moduleId, featureId)) {
     return <Navigate to="/" replace />
   }
 
@@ -102,14 +103,18 @@ export default function DynamicRouter() {
         {installedModules.flatMap(manifest =>
           (manifest.routes ?? []).map(routeCfg => {
             const Page = lazy(routeCfg.component)
+            // If a menuItem for this path declares a featureId, gate the route
+            // by that feature too — keeps direct URL access in sync with the sidebar.
+            const menuItem  = manifest.menuItems?.find(mi => mi.path === routeCfg.path)
+            const featureId = menuItem?.requiredPermission?.featureId ?? null
 
             return (
               <Route
                 key={`${manifest.id}::${routeCfg.path}`}
                 path={routeCfg.path}
                 element={
-                  // Permission guard — checks VIEW on the module before rendering
-                  <PermissionRoute moduleId={manifest.id}>
+                  // Permission guard — checks VIEW on the module (and feature) before rendering
+                  <PermissionRoute moduleId={manifest.id} featureId={featureId}>
                     <Suspense fallback={<PageLoader />}>
                       <Page />
                     </Suspense>

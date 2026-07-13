@@ -95,7 +95,7 @@ export function PermissionProvider({ children }) {
     try {
       const { data, error } = await supabase
         .from('tenant_user_permissions')
-        .select('module_id, can_view, can_create, can_edit, can_delete, can_approve, can_export')
+        .select('module_id, feature_id, can_view, can_create, can_edit, can_delete, can_approve, can_export')
         .eq('tenant_id', tenantId)
         .eq('user_id',   userId)
 
@@ -147,13 +147,13 @@ export function PermissionProvider({ children }) {
   // ── Resolver helpers exposed to components ───────────────────
 
   /**
-   * can(action, moduleId?)
+   * can(action, moduleId?, featureId?)
    * The primary check used everywhere in the UI.
    * Reads from window.__erp_user__ so it always has the latest data.
    */
-  const can = useCallback((action, moduleId = null) => {
+  const can = useCallback((action, moduleId = null, featureId = null) => {
     const user = window.__erp_user__
-    return coreCan(user, action, moduleId)
+    return coreCan(user, action, moduleId, featureId)
   }, [permissions]) // re-memoize when permissions change
 
   /** True if the user can view a module at all */
