@@ -3,15 +3,17 @@ import { Link } from 'react-router-dom'
 import { Clock, Search, Check, X, Eye } from 'lucide-react'
 import {
   Button, Badge, Table, Thead, Th, Tbody, Tr, Td,
-  PageHeader, Card, Modal, EmptyState, Spinner,
+  PageHeader, Card, EmptyState, Spinner,
 } from '@shared/components/ui'
 import PermissionGate from '@shared/components/PermissionGate'
 import Pagination from '@shared/components/Pagination'
 import toast from '@shared/lib/toast'
-import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import { PAGE_SIZE_TABLE as PAGE_SIZE } from '@shared/lib/constants'
-import { actOnApprovalRequest } from '@shared/lib/approvalWorkflow'
+import { fetchPendingRequests, fetchWorkflowStepCount } from '../api/approvalRequests'
+import { useApprovalAction } from '../hooks/useApprovalAction'
+import { useApprovalModuleOptions } from '../hooks/useApprovalModuleOptions'
+import ApprovalActionModal from '../components/ApprovalActionModal'
 
 const PRIORITY = {
   low:    { label: 'Low',    color: 'default' },
@@ -20,26 +22,9 @@ const PRIORITY = {
   urgent: { label: 'Urgent', color: 'red'     },
 }
 
-const MODULE_OPTIONS = [
-  { value: 'all',      label: 'All Modules' },
-  { value: 'purchase', label: 'Purchase'    },
-  { value: 'sales',    label: 'Sales'       },
-  { value: 'hr',       label: 'HR'          },
-  { value: 'assets',   label: 'Assets'      },
-  { value: 'accounts', label: 'Accounts'    },
-]
-
 const SELECT_CLS =
   'px-3 py-2 rounded-lg text-sm text-slate-700 dark:text-slate-200 ' +
   'bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 ' +
-  'focus:outline-none focus:ring-1 focus:ring-brand-500'
-
-const TEXTAREA_CLS =
-  'w-full px-3 py-2 rounded-lg text-sm resize-none ' +
-  'text-slate-700 dark:text-slate-200 ' +
-  'placeholder:text-slate-400 dark:placeholder:text-slate-600 ' +
-  'bg-white dark:bg-surface-900 ' +
-  'border border-surface-200 dark:border-surface-700 ' +
   'focus:outline-none focus:ring-1 focus:ring-brand-500'
 
 export default function PendingApprovals() {
@@ -53,31 +38,17 @@ export default function PendingApprovals() {
   const [search, setSearch]           = useState('')
   const [priorityFilter, setPriority] = useState('all')
   const [moduleFilter, setModule]     = useState('all')
-  const [actionModal, setActionModal] = useState(null)
-  const [comment, setComment]         = useState('')
-  const [submitting, setSubmitting]   = useState(false)
+  const moduleOptions = useApprovalModuleOptions()
 
   const fetchRequests = useCallback(async () => {
     if (!tenantId) return
     setLoading(true)
     try {
-      let q = supabase
-        .from('approval_requests')
-        .select('*, workflow:approval_workflows(id, name)', { count: 'exact' })
-        .eq('tenant_id', tenantId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-
-      if (search.trim())
-        q = q.or(`title.ilike.%${search.trim()}%,request_number.ilike.%${search.trim()}%`)
-      if (priorityFilter !== 'all') q = q.eq('priority', priorityFilter)
-      if (moduleFilter  !== 'all') q = q.eq('module', moduleFilter)
-      q = q.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
-
-      const { data, error, count } = await q
-      if (error) throw error
-      setRequests(data || [])
-      setTotal(count || 0)
+      const { requests, total } = await fetchPendingRequests(tenantId, {
+        search, priority: priorityFilter, module: moduleFilter, page, pageSize: PAGE_SIZE,
+      })
+      setRequests(requests)
+      setTotal(total)
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -88,47 +59,11 @@ export default function PendingApprovals() {
   useEffect(() => { fetchRequests() }, [fetchRequests])
   useEffect(() => { setPage(1) }, [search, priorityFilter, moduleFilter])
 
-  const openAction = (req, action) => {
-    setActionModal({
-      id: req.id, action, title: req.title, workflowId: req.workflow_id, currentStep: req.current_step,
-      module: req.module, recordId: req.record_id, recordType: req.record_type,
-    })
-    setComment('')
-  }
-  const closeModal = () => { setActionModal(null); setComment('') }
+  const { actionModal, comment, setComment, submitting, openAction, closeModal, confirmAction } =
+    useApprovalAction({ tenantId, userId, onDone: fetchRequests })
 
-  const confirmAction = async () => {
-    if (actionModal.action === 'reject' && !comment.trim()) {
-      toast.error('Please provide a reason for rejection.')
-      return
-    }
-    setSubmitting(true)
-    try {
-      let totalSteps = 1
-      if (actionModal.workflowId) {
-        const { count } = await supabase
-          .from('approval_workflow_steps')
-          .select('id', { count: 'exact', head: true })
-          .eq('workflow_id', actionModal.workflowId)
-        totalSteps = count || 1
-      }
-
-      await actOnApprovalRequest({
-        tenantId,
-        request: {
-          id: actionModal.id, current_step: actionModal.currentStep,
-          module: actionModal.module, record_id: actionModal.recordId, record_type: actionModal.recordType,
-        },
-        totalSteps, action: actionModal.action, actorId: userId, comment,
-      })
-
-      toast.success(actionModal.action === 'approve' ? 'Request approved.' : 'Request rejected.')
-      closeModal(); fetchRequests()
-    } catch (err) {
-      toast.error(err.message)
-    } finally {
-      setSubmitting(false)
-    }
+  const openRequestAction = (req, action) => {
+    openAction(req, action, () => req.workflow_id ? fetchWorkflowStepCount(req.workflow_id) : 1)
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
@@ -151,7 +86,7 @@ export default function PendingApprovals() {
               placeholder="Search by title or request #..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className={`w-full pl-9 pr-3 py-2 rounded-lg text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500`}
+              className="w-full pl-9 pr-3 py-2 rounded-lg text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
           <select value={priorityFilter} onChange={e => setPriority(e.target.value)} className={SELECT_CLS}>
@@ -162,7 +97,8 @@ export default function PendingApprovals() {
             <option value="low">Low</option>
           </select>
           <select value={moduleFilter} onChange={e => setModule(e.target.value)} className={SELECT_CLS}>
-            {MODULE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            <option value="all">All Modules</option>
+            {moduleOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
       </Card>
@@ -207,8 +143,8 @@ export default function PendingApprovals() {
                           <Button variant="ghost" size="xs"><Eye className="w-3.5 h-3.5" /></Button>
                         </Link>
                         <PermissionGate action="approve" moduleId="approval">
-                          <Button variant="danger" size="xs" onClick={() => openAction(req, 'reject')}><X className="w-3.5 h-3.5" /></Button>
-                          <Button variant="success" size="xs" onClick={() => openAction(req, 'approve')}><Check className="w-3.5 h-3.5" /></Button>
+                          <Button variant="danger" size="xs" onClick={() => openRequestAction(req, 'reject')}><X className="w-3.5 h-3.5" /></Button>
+                          <Button variant="success" size="xs" onClick={() => openRequestAction(req, 'approve')}><Check className="w-3.5 h-3.5" /></Button>
                         </PermissionGate>
                       </div>
                     </Td>
@@ -225,31 +161,15 @@ export default function PendingApprovals() {
         )}
       </Card>
 
-      <Modal open={!!actionModal} onClose={closeModal} title={actionModal?.action === 'approve' ? 'Approve Request' : 'Reject Request'} size="sm">
-        <div className="space-y-4">
-          {actionModal && (
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 bg-surface-50 dark:bg-surface-800 rounded-lg px-3 py-2 truncate border border-surface-200 dark:border-surface-700">
-              {actionModal.title}
-            </p>
-          )}
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {actionModal?.action === 'approve' ? 'Add an optional comment before approving.' : 'Please provide a reason for rejection.'}
-          </p>
-          <textarea
-            rows={3}
-            className={TEXTAREA_CLS}
-            placeholder={actionModal?.action === 'approve' ? 'Optional comment...' : 'Reason for rejection (required)...'}
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-          />
-          <div className="flex gap-3">
-            <Button variant="secondary" className="flex-1" onClick={closeModal}>Cancel</Button>
-            <Button variant={actionModal?.action === 'approve' ? 'success' : 'danger'} className="flex-1" loading={submitting} onClick={confirmAction}>
-              {actionModal?.action === 'approve' ? 'Approve' : 'Reject'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <ApprovalActionModal
+        actionModal={actionModal}
+        comment={comment}
+        onCommentChange={setComment}
+        submitting={submitting}
+        onClose={closeModal}
+        onConfirm={confirmAction}
+        itemLabel={actionModal?.request?.title}
+      />
     </div>
   )
 }

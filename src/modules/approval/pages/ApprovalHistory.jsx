@@ -7,9 +7,10 @@ import {
 } from '@shared/components/ui'
 import Pagination from '@shared/components/Pagination'
 import toast from '@shared/lib/toast'
-import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import { PAGE_SIZE_TABLE as PAGE_SIZE } from '@shared/lib/constants'
+import { fetchHistory } from '../api/approvalRequests'
+import { useApprovalModuleOptions } from '../hooks/useApprovalModuleOptions'
 
 const STATUS = {
   pending:   { label: 'Pending',   color: 'yellow'  },
@@ -26,16 +27,6 @@ const PRIORITY = {
   urgent: { label: 'Urgent', color: 'red'     },
 }
 
-const MODULE_OPTIONS = [
-  { value: 'all',      label: 'All Modules' },
-  { value: 'purchase', label: 'Purchase'    },
-  { value: 'sales',    label: 'Sales'       },
-  { value: 'hr',       label: 'HR'          },
-  { value: 'assets',   label: 'Assets'      },
-  { value: 'accounts', label: 'Accounts'    },
-]
-
-// Shared class strings
 const INPUT_CLS =
   'px-3 py-2 rounded-lg text-sm ' +
   'text-slate-700 dark:text-slate-200 ' +
@@ -75,32 +66,17 @@ export default function ApprovalHistory() {
   const [moduleFilter, setModule] = useState('all')
   const [dateFrom, setDateFrom]   = useState('')
   const [dateTo, setDateTo]       = useState('')
+  const moduleOptions = useApprovalModuleOptions()
 
-  const fetchHistory = useCallback(async () => {
+  const loadHistory = useCallback(async () => {
     if (!tenantId) return
     setLoading(true)
     try {
-      let q = supabase
-        .from('approval_requests')
-        .select('*, workflow:approval_workflows(id, name)', { count: 'exact' })
-        .eq('tenant_id', tenantId)
-        .order('updated_at', { ascending: false })
-
-      if (tab === 'all') q = q.neq('status', 'pending')
-      else q = q.eq('status', tab)
-
-      if (search.trim())
-        q = q.or(`title.ilike.%${search.trim()}%,request_number.ilike.%${search.trim()}%`)
-      if (moduleFilter !== 'all') q = q.eq('module', moduleFilter)
-      if (dateFrom) q = q.gte('created_at', dateFrom)
-      if (dateTo)   q = q.lte('created_at', `${dateTo}T23:59:59`)
-
-      q = q.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
-
-      const { data, error, count } = await q
-      if (error) throw error
-      setRequests(data || [])
-      setTotal(count || 0)
+      const { requests, total } = await fetchHistory(tenantId, {
+        tab, search, module: moduleFilter, dateFrom, dateTo, page, pageSize: PAGE_SIZE,
+      })
+      setRequests(requests)
+      setTotal(total)
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -108,7 +84,7 @@ export default function ApprovalHistory() {
     }
   }, [tenantId, tab, search, moduleFilter, dateFrom, dateTo, page])
 
-  useEffect(() => { fetchHistory() }, [fetchHistory])
+  useEffect(() => { loadHistory() }, [loadHistory])
   useEffect(() => { setPage(1) }, [tab, search, moduleFilter, dateFrom, dateTo])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
@@ -153,13 +129,14 @@ export default function ApprovalHistory() {
             placeholder="Search..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className={`pl-9 pr-3 py-2 rounded-lg text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500`}
+            className="pl-9 pr-3 py-2 rounded-lg text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
         </div>
 
         {/* Module */}
         <select value={moduleFilter} onChange={e => setModule(e.target.value)} className={INPUT_CLS}>
-          {MODULE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          <option value="all">All Modules</option>
+          {moduleOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
 
         {/* Date range */}
