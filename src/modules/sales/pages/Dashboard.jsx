@@ -7,97 +7,28 @@ import {
 } from '@shared/components/ui'
 import PermissionGate from '@shared/components/PermissionGate'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import { SALES_ORDER_STATUS as STATUS } from '@shared/lib/constants'
-
-function buildMonthBuckets() {
-  const now = new Date()
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
-    return {
-      month:   d.toLocaleString('default', { month: 'short' }),
-      year:    d.getFullYear(),
-      m:       d.getMonth() + 1,
-      revenue: 0,
-      orders:  0,
-    }
-  })
-}
+import { fetchSalesDashboard } from '../api/dashboard'
 
 export default function SalesDashboard() {
   const { tenantId } = useTenant()
   const [stats,    setStats]    = useState({ orders: 0, customers: 0, revenue: 0 })
   const [pipeline, setPipeline] = useState([])
   const [recent,   setRecent]   = useState([])
-  const [chart,    setChart]    = useState(buildMonthBuckets().map(({ month }) => ({ month, revenue: 0, orders: 0 })))
+  const [chart,    setChart]    = useState([])
   const [loading,  setLoading]  = useState(true)
 
   useEffect(() => {
     if (!tenantId) return
-    load()
-  }, [tenantId])
-
-  async function load() {
     setLoading(true)
-    try {
-      const sixMonthsAgo = new Date()
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
-      sixMonthsAgo.setDate(1)
-      const cutoff = sixMonthsAgo.toISOString().split('T')[0]
-
-      const [allOrdersRes, customersRes, recentRes, chartRes] = await Promise.all([
-        supabase
-          .from('sales_orders')
-          .select('status, total_amount')
-          .eq('tenant_id', tenantId),
-        supabase
-          .from('customers')
-          .select('id', { count: 'exact', head: true })
-          .eq('tenant_id', tenantId),
-        supabase
-          .from('sales_orders')
-          .select('id, order_number, status, order_date, total_amount, customer:customers(name)')
-          .eq('tenant_id', tenantId)
-          .order('created_at', { ascending: false })
-          .limit(5),
-        supabase
-          .from('sales_orders')
-          .select('order_date, total_amount')
-          .eq('tenant_id', tenantId)
-          .gte('order_date', cutoff),
-      ])
-
-      const all     = allOrdersRes.data || []
-      const revenue = all.reduce((s, o) => s + (Number(o.total_amount) || 0), 0)
-
-      setStats({ orders: all.length, customers: customersRes.count || 0, revenue })
-
-      const totalOrders = all.length || 1
-      setPipeline([
-        { label: 'Drafts',    value: all.filter(o => o.status === 'draft').length,     color: '#64748b', total: totalOrders },
-        { label: 'Confirmed', value: all.filter(o => o.status === 'confirmed').length,  color: '#3b82f6', total: totalOrders },
-        { label: 'Invoiced',  value: all.filter(o => o.status === 'invoiced').length,   color: '#8b5cf6', total: totalOrders },
-        { label: 'Done',      value: all.filter(o => o.status === 'done').length,       color: '#10b981', total: totalOrders },
-      ])
-
-      setRecent(recentRes.data || [])
-
-      const buckets = buildMonthBuckets()
-      ;(chartRes.data || []).forEach(o => {
-        if (!o.order_date) return
-        const d   = new Date(o.order_date)
-        const idx = buckets.findIndex(b => b.m === d.getMonth() + 1 && b.year === d.getFullYear())
-        if (idx >= 0) {
-          buckets[idx].revenue += Number(o.total_amount) || 0
-          buckets[idx].orders  += 1
-        }
-      })
-      setChart(buckets.map(({ month, revenue, orders }) => ({ month, revenue, orders })))
-    } finally {
-      setLoading(false)
-    }
-  }
+    fetchSalesDashboard(tenantId).then(({ stats, pipeline, recent, chart }) => {
+      setStats(stats)
+      setPipeline(pipeline)
+      setRecent(recent)
+      setChart(chart)
+    }).finally(() => setLoading(false))
+  }, [tenantId])
 
   if (loading) {
     return (
