@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import {
-  PageHeader, Badge, Card, Button, Table, Thead, Th, Tbody, Tr, Td, Spinner,
-} from '@shared/components/ui'
-import { CheckCircle, XCircle, Printer, ArrowLeft, Package, Plus, Pencil, Trash2, Send, ShoppingCart } from 'lucide-react'
+import { PageHeader, Card, Button, Spinner } from '@shared/components/ui'
+import { CheckCircle, XCircle, Printer, ArrowLeft, Send, ShoppingCart } from 'lucide-react'
 import { useTenant } from '@core/tenant/TenantContext'
 import toast from '@shared/lib/toast'
 import PermissionGate from '@shared/components/PermissionGate'
@@ -12,6 +10,8 @@ import {
   fetchRFQDetail, deleteRFQLine, updateRFQStatus, convertRfqToPurchaseOrder,
 } from '../api/rfqs'
 import RFQLineModal from '../components/RFQLineModal'
+import RFQLinesTable from '../components/RFQLinesTable'
+import RFQInfoCard from '../components/RFQInfoCard'
 import VendorInfoCard from '../components/VendorInfoCard'
 
 export default function RFQDetail() {
@@ -159,96 +159,17 @@ export default function RFQDetail() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Card>
-            <div className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300">Requested Items</h3>
-                {canEditLines && (
-                  <PermissionGate action="edit" moduleId="purchase">
-                    <Button size="xs" onClick={openAddLine} className="print:hidden">
-                      <Plus className="w-3.5 h-3.5" />Add Line
-                    </Button>
-                  </PermissionGate>
-                )}
-              </div>
-
-              {lines.length === 0 ? (
-                <div className="py-8 text-center">
-                  <Package className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                  <p className="text-slate-500 text-sm">No items on this RFQ.</p>
-                  {canEditLines && (
-                    <p className="text-slate-600 text-xs mt-1">Click "Add Line" to add products.</p>
-                  )}
-                </div>
-              ) : (
-                <Table>
-                  <Thead>
-                    <Th>Product</Th>
-                    <Th>Quantity</Th>
-                    {canEditLines && <Th></Th>}
-                  </Thead>
-                  <Tbody>
-                    {lines.map(item => (
-                      <Tr key={item.id}>
-                        <Td>
-                          <span className="font-medium text-slate-900 dark:text-slate-200">{item.product_name}</span>
-                        </Td>
-                        <Td>{Number(item.quantity)}</Td>
-                        {canEditLines && (
-                          <Td>
-                            <div className="flex gap-1">
-                              <PermissionGate action="edit" moduleId="purchase">
-                                <Button variant="ghost" size="xs" onClick={() => openEditLine(item)}>
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button variant="danger" size="xs" onClick={() => handleDeleteLine(item.id)}>
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              </PermissionGate>
-                            </div>
-                          </Td>
-                        )}
-                      </Tr>
-                    ))}
-                  </Tbody>
-                </Table>
-              )}
-            </div>
-          </Card>
+          <RFQLinesTable
+            lines={lines}
+            canEditLines={canEditLines}
+            onAdd={openAddLine}
+            onEdit={openEditLine}
+            onDelete={handleDeleteLine}
+          />
         </div>
 
         <div className="space-y-4">
-          <Card className="p-5">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300 mb-4">RFQ Info</h3>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Status</span>
-                <Badge color={s.color}>{s.label}</Badge>
-              </div>
-              {rfq.deadline && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Deadline</span>
-                  <span className="text-slate-700 dark:text-slate-300">{rfq.deadline}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-slate-500">Items</span>
-                <span className="text-slate-700 dark:text-slate-300">{lines.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Quoted Amount</span>
-                <span className="text-slate-700 dark:text-slate-300">
-                  {rfq.quoted_amount > 0 ? `$${Number(rfq.quoted_amount).toLocaleString()}` : '—'}
-                </span>
-              </div>
-              {rfq.created_at && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Created</span>
-                  <span className="text-slate-700 dark:text-slate-300">{new Date(rfq.created_at).toLocaleDateString()}</span>
-                </div>
-              )}
-            </div>
-          </Card>
+          <RFQInfoCard rfq={rfq} statusInfo={s} lines={lines} />
 
           <VendorInfoCard vendor={rfq.vendor} />
 

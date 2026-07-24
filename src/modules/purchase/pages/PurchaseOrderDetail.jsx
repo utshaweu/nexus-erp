@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import {
-  PageHeader, Badge, Card, Button, Table, Thead, Th, Tbody, Tr, Td, Spinner,
-} from '@shared/components/ui'
-import { CheckCircle, XCircle, Printer, ArrowLeft, Package, Plus, Pencil, Trash2, Send } from 'lucide-react'
+import { PageHeader, Card, Button, Spinner } from '@shared/components/ui'
+import { CheckCircle, XCircle, Printer, ArrowLeft, Package, Send } from 'lucide-react'
 import { useTenant } from '@core/tenant/TenantContext'
 import toast from '@shared/lib/toast'
 import PermissionGate from '@shared/components/PermissionGate'
@@ -12,6 +10,8 @@ import {
   fetchPurchaseOrderDetail, deletePOLine, updatePOStatus, submitPOForApproval,
 } from '../api/purchaseOrders'
 import POLineModal from '../components/POLineModal'
+import POLinesTable from '../components/POLinesTable'
+import POInfoCard from '../components/POInfoCard'
 import VendorInfoCard from '../components/VendorInfoCard'
 
 export default function PurchaseOrderDetail() {
@@ -162,126 +162,20 @@ export default function PurchaseOrderDetail() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Card>
-            <div className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300">Order Lines</h3>
-                {canEditLines && (
-                  <PermissionGate action="edit" moduleId="purchase">
-                    <Button size="xs" onClick={openAddLine} className="print:hidden">
-                      <Plus className="w-3.5 h-3.5" />Add Line
-                    </Button>
-                  </PermissionGate>
-                )}
-              </div>
-
-              {lines.length === 0 ? (
-                <div className="py-8 text-center">
-                  <Package className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                  <p className="text-slate-500 text-sm">No line items on this order.</p>
-                  {canEditLines && (
-                    <p className="text-slate-600 text-xs mt-1">Click "Add Line" to add products.</p>
-                  )}
-                </div>
-              ) : (
-                <Table>
-                  <Thead>
-                    <Th>Product / Description</Th>
-                    <Th>Qty</Th>
-                    <Th>Unit Price</Th>
-                    <Th>Tax %</Th>
-                    <Th>Line Total</Th>
-                    {canEditLines && <Th></Th>}
-                  </Thead>
-                  <Tbody>
-                    {lines.map(item => {
-                      const lineTotal = Number(item.quantity) * Number(item.unit_price)
-                      return (
-                        <Tr key={item.id}>
-                          <Td>
-                            <span className="font-medium text-slate-900 dark:text-slate-200">{item.product_name}</span>
-                          </Td>
-                          <Td>{Number(item.quantity)}</Td>
-                          <Td>${Number(item.unit_price).toLocaleString()}</Td>
-                          <Td>{Number(item.tax_rate) || 0}%</Td>
-                          <Td className="font-semibold">${lineTotal.toLocaleString()}</Td>
-                          {canEditLines && (
-                            <Td>
-                              <div className="flex gap-1">
-                                <PermissionGate action="edit" moduleId="purchase">
-                                  <Button variant="ghost" size="xs" onClick={() => openEditLine(item)}>
-                                    <Pencil className="w-3.5 h-3.5" />
-                                  </Button>
-                                  <Button variant="danger" size="xs" onClick={() => handleDeleteLine(item.id)}>
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </Button>
-                                </PermissionGate>
-                              </div>
-                            </Td>
-                          )}
-                        </Tr>
-                      )
-                    })}
-                  </Tbody>
-                </Table>
-              )}
-
-              <div className="mt-4 pt-4 border-t border-surface-200 dark:border-surface-800 space-y-1.5 text-sm">
-                <div className="flex justify-between text-slate-500 dark:text-slate-400">
-                  <span>Subtotal</span>
-                  <span>${subtotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-slate-500 dark:text-slate-400">
-                  <span>Tax</span>
-                  <span>${taxAmt.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-slate-900 dark:text-slate-100 text-base pt-2 border-t border-surface-200 dark:border-surface-800 mt-2">
-                  <span>Total</span>
-                  <span>${total.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-          </Card>
+          <POLinesTable
+            lines={lines}
+            canEditLines={canEditLines}
+            onAdd={openAddLine}
+            onEdit={openEditLine}
+            onDelete={handleDeleteLine}
+            subtotal={subtotal}
+            taxAmt={taxAmt}
+            total={total}
+          />
         </div>
 
         <div className="space-y-4">
-          <Card className="p-5">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300 mb-4">Order Info</h3>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Status</span>
-                <Badge color={s.color}>{s.label}</Badge>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Order Date</span>
-                <span className="text-slate-700 dark:text-slate-300">{order.order_date}</span>
-              </div>
-              {order.expected_date && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Expected</span>
-                  <span className="text-slate-700 dark:text-slate-300">{order.expected_date}</span>
-                </div>
-              )}
-              {order.reference && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Reference</span>
-                  <span className="font-mono text-xs text-slate-700 dark:text-slate-300">{order.reference}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-slate-500">Lines</span>
-                <span className="text-slate-700 dark:text-slate-300">{lines.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Subtotal</span>
-                <span className="text-slate-700 dark:text-slate-300">${subtotal.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between font-semibold pt-2 border-t border-surface-200 dark:border-surface-800">
-                <span className="text-slate-400">Total</span>
-                <span className="text-slate-900 dark:text-slate-100">${total.toLocaleString()}</span>
-              </div>
-            </div>
-          </Card>
+          <POInfoCard order={order} statusInfo={s} lines={lines} subtotal={subtotal} total={total} />
 
           <VendorInfoCard vendor={order.vendor} />
 
