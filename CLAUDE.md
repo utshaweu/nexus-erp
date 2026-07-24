@@ -42,19 +42,19 @@ Steps are sequential — each depends on the previous. Teardown on sign-out reve
 
 ### Module system
 
-Every feature is a **module manifest** (`src/modules/<name>/index.js`). A manifest declares:
+Every feature is a **module folder** (`src/modules/<name>/`) with `api/`, `components/`, `hooks/`, `pages/`, and an `index.js` manifest that owns only the non-serialisable parts:
 
 ```js
 {
-  id, name, description, version, icon, color, category,
-  dependencies: [],     // other module ids required before install
-  menuItems: [{ id, label, path, icon, requiredPermission }],
+  id,
   routes: [{ path, component: () => import('./pages/SomePage') }],
   storeSlice: (set) => ({ ... }),  // optional Zustand slice
   onInstall: async () => {},
   onUninstall: async () => {},
 }
 ```
+
+Display metadata (`name`, `description`, `icon`, `menuItems`, `features`, etc.) lives in the DB-driven `module_catalog` table and is merged over the code manifest by `ModuleRegistry` at login — editable without a code change. Empty/offline table falls back to the code manifest as-is.
 
 All manifests are registered in `src/app/Shell.jsx` before any login. `ModuleRegistry` (singleton at `src/core/registry/ModuleRegistry.js`) manages install state per tenant, persists to `tenant_modules` in Supabase with localStorage fallback.
 
@@ -64,13 +64,14 @@ All manifests are registered in `src/app/Shell.jsx` before any login. `ModuleReg
 
 ### Permission system
 
-Three-level resolution in `src/core/permissions/permissions.js` (pure functions, no React):
+Resolution in `src/core/permissions/permissions.js` (`can(user, action, moduleId, featureId?)`, pure functions, no React):
 
 1. `isSuperAdmin` → always true
-2. Explicit DB override (`tenant_user_permissions` table) → true/false
-3. Role default (`ROLE_DEFAULTS`) → viewer/user/manager/admin/owner matrix
+2. Explicit feature-level override (`tenant_user_permissions` row with a `feature_id`) → true/false, only checked when `featureId` is passed
+3. Explicit module-level override (`feature_id IS NULL`) → true/false
+4. Role default (`ROLE_DEFAULTS`) → viewer/user/manager/admin/owner matrix
 
-`PermissionContext` exposes `can(action, moduleId)` reactively. `usePermissions()` is the hook. The `ACTIONS` and `ROLES` constants are the source of truth — import them instead of using raw strings.
+A menu item opts into feature-level gating via `requiredPermission.featureId` in `module_catalog.menu_items`. `PermissionContext` exposes `can(action, moduleId, featureId?)` reactively. `usePermissions()` is the hook. The `ACTIONS` and `ROLES` constants are the source of truth — import them instead of using raw strings.
 
 ### State management
 
@@ -100,7 +101,7 @@ Configure via `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env`. Super-
 
 ### Adding a new module
 
-1. Create `src/modules/<name>/index.js` with the manifest shape above.
-2. Create page components under `src/modules/<name>/pages/`.
+1. Create `src/modules/<name>/{api,components,hooks,pages}/` and `index.js` with the manifest shape above.
+2. Add a row to `module_catalog` (name, description, icon, menuItems, features, etc.) — this is now MANDATORY, not optional.
 3. Register the manifest in `src/app/Shell.jsx` (the array passed to `registry.register`).
 4. Add the icon string to `ICON_MAP` in `src/app/Sidebar.jsx` if using a new Lucide icon.
