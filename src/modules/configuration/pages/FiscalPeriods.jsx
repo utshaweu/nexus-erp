@@ -1,92 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Plus, Lock, Unlock, CalendarDays } from 'lucide-react'
 import {
   Button, Badge, Table, Thead, Th, Tbody, Tr, Td,
-  PageHeader, Card, Modal, Input, Spinner, EmptyState, StatCard,
+  PageHeader, Card, Spinner, EmptyState, StatCard,
 } from '@shared/components/ui'
 import { useTenant } from '@core/tenant/TenantContext'
-import { supabase } from '@/shared/api/supabase'
 import PermissionGate from '@shared/components/PermissionGate'
 import toast from '@shared/lib/toast'
+import { fetchFiscalPeriods, createFiscalPeriod, setFiscalPeriodStatus, deleteFiscalPeriod } from '../api/fiscalPeriods'
+import NewPeriodModal from '../components/NewPeriodModal'
 
 const STATUS_CONFIG = {
   open:   { label: 'Open',   color: 'green'  },
   closed: { label: 'Closed', color: 'yellow' },
   locked: { label: 'Locked', color: 'red'    },
-}
-
-// ── Zod schema ─────────────────────────────────────────────────────────────
-const periodSchema = z
-  .object({
-    name:       z.string().trim().min(1, 'Period name is required').max(100),
-    start_date: z.string().min(1, 'Start date is required'),
-    end_date:   z.string().min(1, 'End date is required'),
-  })
-  .refine(d => d.start_date < d.end_date, {
-    message: 'End date must be after start date',
-    path:    ['end_date'],
-  })
-
-// ── New Period Modal ────────────────────────────────────────────────────────
-function NewPeriodModal({ onClose, onSave }) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: zodResolver(periodSchema),
-    defaultValues: { name: '', start_date: '', end_date: '' },
-  })
-
-  const onSubmit = async (data) => {
-    const err = await onSave(data)
-    if (err) {
-      toast.error(err)
-    } else {
-      toast.success('Fiscal period created.')
-      onClose()
-    }
-  }
-
-  return (
-    <Modal open onClose={onClose} title="New Fiscal Period" size="sm">
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
-        <div className="space-y-4">
-          <Input
-            label="Period Name"
-            placeholder="e.g. FY 2025-26 Q1"
-            error={errors.name?.message}
-            {...register('name')}
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Start Date"
-              type="date"
-              error={errors.start_date?.message}
-              {...register('start_date')}
-            />
-            <Input
-              label="End Date"
-              type="date"
-              error={errors.end_date?.message}
-              {...register('end_date')}
-            />
-          </div>
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" className="flex-1" loading={isSubmitting}>
-              Create Period
-            </Button>
-          </div>
-        </div>
-      </form>
-    </Modal>
-  )
 }
 
 // ── Main page ───────────────────────────────────────────────────────────────
@@ -99,55 +26,41 @@ export default function FiscalPeriods() {
   const fetchPeriods = useCallback(async () => {
     if (!tenantId) return
     setLoading(true)
-    const { data } = await supabase
-      .from('fiscal_periods')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .order('start_date', { ascending: false })
-    setPeriods(data ?? [])
+    setPeriods(await fetchFiscalPeriods(tenantId))
     setLoading(false)
   }, [tenantId])
 
   useEffect(() => { fetchPeriods() }, [fetchPeriods])
 
   const handleCreate = async (data) => {
-    const { error } = await supabase.from('fiscal_periods').insert({
-      tenant_id:  tenantId,
-      name:       data.name.trim(),
-      start_date: data.start_date,
-      end_date:   data.end_date,
-      status:     'open',
-    })
-    if (error) return error.message
-    fetchPeriods()
-    return null
+    try {
+      await createFiscalPeriod(tenantId, data)
+      fetchPeriods()
+      return null
+    } catch (err) {
+      return err.message
+    }
   }
 
   const handleSetStatus = async (period, status) => {
-    const { error } = await supabase
-      .from('fiscal_periods')
-      .update({ status })
-      .eq('id', period.id)
-    if (error) {
-      toast.error(error.message)
-    } else {
+    try {
+      await setFiscalPeriodStatus(period, status)
       toast.success(`"${period.name}" marked as ${status}.`)
       fetchPeriods()
+    } catch (err) {
+      toast.error(err.message)
     }
   }
 
   const handleDelete = async (period) => {
     if (period.status === 'locked') return
     if (!window.confirm(`Delete "${period.name}"? This cannot be undone.`)) return
-    const { error } = await supabase
-      .from('fiscal_periods')
-      .delete()
-      .eq('id', period.id)
-    if (error) {
-      toast.error(error.message)
-    } else {
+    try {
+      await deleteFiscalPeriod(period)
       toast.success(`"${period.name}" deleted.`)
       fetchPeriods()
+    } catch (err) {
+      toast.error(err.message)
     }
   }
 
