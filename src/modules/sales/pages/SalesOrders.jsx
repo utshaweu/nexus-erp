@@ -13,8 +13,8 @@ import {
 } from '@shared/lib/constants'
 import { fetchSalesOrders, confirmSalesOrder, deleteSalesOrder } from '../api/salesOrders'
 import { fetchActiveCustomerOptions } from '../api/customers'
-import { useResourceList } from '../hooks/useResourceList'
-import ListToolbar from '../components/ListToolbar'
+import { useResourceList } from '@shared/hooks/useResourceList'
+import ListToolbar from '@shared/components/ListToolbar'
 import NewOrderModal from '../components/NewOrderModal'
 
 const TABS = STATUS_TABS.map(s => ({ value: s, label: s === 'all' ? 'All' : STATUS[s]?.label }))

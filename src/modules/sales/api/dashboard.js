@@ -1,18 +1,5 @@
 import { supabase } from '@shared/api/supabase'
-
-function buildMonthBuckets() {
-  const now = new Date()
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
-    return {
-      month:   d.toLocaleString('default', { month: 'short' }),
-      year:    d.getFullYear(),
-      m:       d.getMonth() + 1,
-      revenue: 0,
-      orders:  0,
-    }
-  })
-}
+import { buildMonthBuckets } from '@shared/lib/monthBuckets'
 
 export async function fetchSalesDashboard(tenantId) {
   const sixMonthsAgo = new Date()
@@ -53,7 +40,7 @@ export async function fetchSalesDashboard(tenantId) {
     { label: 'Done',      value: all.filter(o => o.status === 'done').length,       color: '#10b981', total: totalOrders },
   ]
 
-  const buckets = buildMonthBuckets()
+  const buckets = buildMonthBuckets(6, { revenue: 0, orders: 0 })
   ;(chartRes.data || []).forEach(o => {
     if (!o.order_date) return
     const d   = new Date(o.order_date)

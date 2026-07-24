@@ -13,8 +13,8 @@ import {
 } from '@shared/lib/constants'
 import { fetchQuotations, sendQuotation, acceptQuotation, deleteQuotation } from '../api/quotations'
 import { fetchActiveCustomerOptions } from '../api/customers'
-import { useResourceList } from '../hooks/useResourceList'
-import ListToolbar from '../components/ListToolbar'
+import { useResourceList } from '@shared/hooks/useResourceList'
+import ListToolbar from '@shared/components/ListToolbar'
 import NewQuotationModal from '../components/NewQuotationModal'
 
 const TABS = STATUS_TABS.map(s => ({ value: s, label: s === 'all' ? 'All' : STATUS[s]?.label }))

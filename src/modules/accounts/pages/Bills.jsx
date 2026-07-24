@@ -13,7 +13,7 @@ import { findActiveWorkflow, submitForApproval } from '@shared/lib/approvalWorkf
 import {
   fetchBills, deleteBill, fetchActiveVendors, fetchActiveProductsForCost, fetchPendingApprovalsForBills,
 } from '../api/bills'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import ListToolbar from '../components/ListToolbar'
 import { ListLoading, ListEmptyState } from '../components/ListStates'
 import BillModal from '../components/BillModal'

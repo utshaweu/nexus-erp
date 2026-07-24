@@ -1,9 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import toast from '@shared/lib/toast'
 
 /**
- * Paginated list + search + single-filter + CRUD-modal state, shared by
- * Vendors/RFQ/PurchaseOrders. `fetchFn({ page, search, filter })` must resolve `{ items, total }`.
+ * Paginated list + search + single-filter + CRUD-modal state, shared across
+ * every module's list pages (Invoices/Bills/Journals/ChartOfAccounts,
+ * Customers/Quotations/SalesOrders/OffersDiscounts, AssetList/Categories/...,
+ * Employees/Departments/..., Products/StockMoves, PurchaseOrders/RFQ/Vendors).
+ * `fetchFn({ page, search, filter })` must resolve `{ items, total }`.
  */
 export function useResourceList(fetchFn, extraDeps = []) {
   const [items, setItems]         = useState([])
@@ -15,21 +18,29 @@ export function useResourceList(fetchFn, extraDeps = []) {
   const [showModal, setShowModal] = useState(false)
   const [editItem, setEditItem]   = useState(null)
 
+  const requestId = useRef(0)
+
   const refetch = useCallback(async () => {
+    const thisRequest = ++requestId.current
     setLoading(true)
     try {
       const { items, total } = await fetchFn({ page, search, filter })
+      if (thisRequest !== requestId.current) return // stale response or unmounted
       setItems(items)
       setTotal(total)
     } catch (err) {
+      if (thisRequest !== requestId.current) return
       toast.error(err.message)
     } finally {
-      setLoading(false)
+      if (thisRequest === requestId.current) setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, search, filter, ...extraDeps])
 
-  useEffect(() => { refetch() }, [refetch])
+  useEffect(() => {
+    refetch()
+    return () => { requestId.current++ }
+  }, [refetch])
   useEffect(() => { setPage(1) }, [search, filter])
 
   const openNew    = ()     => { setEditItem(null); setShowModal(true) }

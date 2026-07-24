@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react'
 
-/** Shared search+status-tab toolbar — byte-identical between Quotations.jsx and SalesOrders.jsx originally. */
+/** Shared search+status-tab toolbar used by Quotations/SalesOrders/RFQ/PurchaseOrders list pages. */
 export default function ListToolbar({ search, onSearchChange, placeholder, tabs, activeTab, onTabChange, children }) {
   return (
     <div className="flex items-center gap-3 p-4 border-b border-surface-200 dark:border-surface-800 flex-wrap">

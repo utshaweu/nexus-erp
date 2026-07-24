@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback, Fragment } from 'react'
 import { supabase } from '@/shared/api/supabase'
 import useStore from '@core/store/useStore'
 import {
-  Users, Plus, Shield, ChevronDown, ChevronUp, ChevronRight,
-  CheckCircle2, XCircle, RefreshCw, UserPlus, Save,
+  Users, Shield, ChevronDown, ChevronUp, ChevronRight,
+  RefreshCw, UserPlus, Save,
 } from 'lucide-react'
 import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,
-  Table, Thead, Th, Tbody, Tr, Td, Modal, Input, PageHeader,
+  Modal, Input, PageHeader,
 } from '@shared/components/ui'
 import { clsx } from 'clsx'
 import toast from '@shared/lib/toast'

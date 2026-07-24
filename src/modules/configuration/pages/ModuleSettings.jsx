@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { CheckCircle, AlertCircle } from 'lucide-react'
 import { PageHeader } from '@shared/components/ui'
 import { useTenant } from '@core/tenant/TenantContext'
@@ -30,9 +30,13 @@ export default function ModuleSettings() {
     return registry.subscribe(() => refresh())
   }, [])
 
+  const flashTimer = useRef(null)
+  useEffect(() => () => clearTimeout(flashTimer.current), [])
+
   const showFlash = (type, text) => {
+    clearTimeout(flashTimer.current)
     setFlash({ type, text })
-    setTimeout(() => setFlash(null), 4000)
+    flashTimer.current = setTimeout(() => setFlash(null), 4000)
   }
 
   const handleInstall = async (moduleId) => {

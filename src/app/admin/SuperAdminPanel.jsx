@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/shared/api/supabase'
 import {
-  Building2, Plus, Users, Package, Settings,
+  Building2, Plus, Users, Package,
   CheckCircle2, XCircle, AlertTriangle, RefreshCw,
-  Trash2, ToggleLeft, ToggleRight,
+  ToggleLeft, ToggleRight,
 } from 'lucide-react'
 import {
   Button, Badge, Card, CardHeader, CardTitle, CardContent,

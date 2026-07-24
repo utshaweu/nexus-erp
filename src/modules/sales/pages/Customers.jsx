@@ -7,7 +7,7 @@ import toast from '@shared/lib/toast'
 import { useTenant } from '@core/tenant/TenantContext'
 import { PAGE_SIZE_GRID as PAGE_SIZE, CUSTOMER_STATUS_TABS as STATUS_TABS } from '@shared/lib/constants'
 import { fetchCustomers, deleteCustomer } from '../api/customers'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import CustomerCard from '../components/CustomerCard'
 import CustomerModal from '../components/CustomerModal'
 

@@ -11,7 +11,7 @@ import { useTenant } from '@core/tenant/TenantContext'
 import { PAGE_SIZE_TABLE as PAGE_SIZE, ASSET_DEPR_STATUS, ASSET_DEPR_STATUS_TABS } from '@shared/lib/constants'
 import { fetchAssetOptions } from '../api/assets'
 import { fetchDepreciationSchedules, fetchDepreciationStats, postDepreciationEntry } from '../api/depreciation'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import ListToolbar from '../components/ListToolbar'
 
 const fmt = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

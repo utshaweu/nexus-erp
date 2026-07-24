@@ -7,7 +7,7 @@ import toast from '@shared/lib/toast'
 import { useTenant } from '@core/tenant/TenantContext'
 import { PAGE_SIZE_GRID as PAGE_SIZE, VENDOR_STATUS_TABS as STATUS_TABS, VENDOR_STATUS_LABEL as STATUS_LABEL } from '@shared/lib/constants'
 import { fetchVendors, deleteVendor } from '../api/vendors'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import VendorCard from '../components/VendorCard'
 import VendorModal from '../components/VendorModal'
 

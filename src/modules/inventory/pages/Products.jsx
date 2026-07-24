@@ -11,7 +11,7 @@ import {
   PAGE_SIZE_TABLE as PAGE_SIZE, PRODUCT_STATUS, PRODUCT_STATUS_TABS,
 } from '@shared/lib/constants'
 import { fetchProducts, deleteProduct } from '../api/products'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import StatChip from '../components/StatChip'
 import ProductModal from '../components/ProductModal'
 

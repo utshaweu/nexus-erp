@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Copy, CheckCircle2 } from 'lucide-react'
 
 export default function CopyButton({ code }) {
   const [copied, setCopied] = useState(false)
+  const timer = useRef(null)
+  useEffect(() => () => clearTimeout(timer.current), [])
   const copy = () => {
     navigator.clipboard.writeText(code)
     setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => setCopied(false), 1500)
   }
   return (
     <button

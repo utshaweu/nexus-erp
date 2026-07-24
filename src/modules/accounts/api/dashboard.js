@@ -1,20 +1,5 @@
 import { supabase } from '@shared/api/supabase'
-
-// Last N month buckets: [{ month:'Jan', key:'2025-01', income:0, expenses:0 }, ...]
-function buildMonthBuckets(n = 6) {
-  const buckets = []
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(1)
-    d.setMonth(d.getMonth() - i)
-    buckets.push({
-      month: d.toLocaleString('en-US', { month: 'short' }),
-      key:   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-      income: 0, expenses: 0,
-    })
-  }
-  return buckets
-}
+import { buildMonthBuckets } from '@shared/lib/monthBuckets'
 
 export async function fetchDashboardData(tenantId) {
   const [invRes, billRes, recentRes] = await Promise.all([
@@ -41,7 +26,7 @@ export async function fetchDashboardData(tenantId) {
   const billsDue = bills.filter(b => ['draft', 'posted'].includes(b.status)).length
   const stats = { revenue, outstanding, invoiceCount, billsDue }
 
-  const cashflow = buildMonthBuckets()
+  const cashflow = buildMonthBuckets(6, { income: 0, expenses: 0 })
   invoices.forEach(inv => {
     if (!inv.invoice_date) return
     const bucket = cashflow.find(b => b.key === inv.invoice_date.slice(0, 7))

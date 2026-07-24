@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { Plus, ArrowLeftRight, Calendar, MoveRight } from 'lucide-react'
 import {
   Button, Table, Thead, Th, Tbody, Tr, Td, PageHeader, Card,
@@ -10,7 +10,7 @@ import {
   PAGE_SIZE_TABLE as PAGE_SIZE, STOCK_MOVE_TYPES, STOCK_MOVE_TYPE_TABS,
 } from '@shared/lib/constants'
 import { fetchStockMoves } from '../api/stockMoves'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import StatChip from '../components/StatChip'
 import StockMoveModal, { MOVE_ICONS, MOVE_BG } from '../components/StockMoveModal'
 

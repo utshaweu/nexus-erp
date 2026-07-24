@@ -11,7 +11,7 @@ import {
   PAGE_SIZE_TABLE as PAGE_SIZE, PAYROLL_RUN_STATUS, PAYROLL_RUN_STATUS_TABS,
 } from '@shared/lib/constants'
 import { fetchPayrollRuns, deletePayrollRun } from '../api/payroll'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import ListToolbar from '../components/ListToolbar'
 import { ListLoading } from '../components/ListStates'
 import PayrollRunModal, { MONTHS } from '../components/PayrollRunModal'

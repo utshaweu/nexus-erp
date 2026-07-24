@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import toast from '@shared/lib/toast'
@@ -10,9 +10,16 @@ export function useSavedFilters(tenantId, reportPage, mainForm, runReport) {
   const [showSave, setShowSave] = useState(false)
   const saveForm = useForm({ resolver: zodResolver(saveFilterSchema), defaultValues: { name: '' } })
 
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+
   const refetch = useCallback(async () => {
     if (!tenantId) return
-    setSavedFilters(await fetchSavedFilters(tenantId, reportPage))
+    const filters = await fetchSavedFilters(tenantId, reportPage)
+    if (mounted.current) setSavedFilters(filters)
   }, [tenantId, reportPage])
 
   useEffect(() => { refetch() }, [refetch])

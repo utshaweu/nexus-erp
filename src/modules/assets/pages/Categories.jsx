@@ -9,7 +9,7 @@ import toast from '@shared/lib/toast'
 import { useTenant } from '@core/tenant/TenantContext'
 import { PAGE_SIZE_TABLE as PAGE_SIZE, DEPRECIATION_METHODS } from '@shared/lib/constants'
 import { fetchCategories, deleteCategory, toggleCategoryActive } from '../api/categories'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import CategoryModal from '../components/CategoryModal'
 
 export default function Categories() {

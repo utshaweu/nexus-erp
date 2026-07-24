@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Check, DollarSign, Pencil, Trash2 } from 'lucide-react'
 import {
-  Button, Badge, Card, Table, Thead, Th, Tbody, Tr, Td, Modal,
+  Button, Badge, Table, Thead, Th, Tbody, Tr, Td, Modal,
 } from '@shared/components/ui'
 import PermissionGate from '@shared/components/PermissionGate'
 import toast from '@shared/lib/toast'

@@ -19,7 +19,7 @@ import {
 } from '../api/employees'
 import { fetchDepartmentOptions } from '../api/departments'
 import { fetchPositionOptions } from '../api/positions'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import ListToolbar from '../components/ListToolbar'
 import { ListLoading } from '../components/ListStates'
 import EmployeeModal from '../components/EmployeeModal'

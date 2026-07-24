@@ -15,7 +15,7 @@ import {
   fetchLinkedEmployeeId, fetchLeaveRequests, fetchEmployeeOptionsForLeave, fetchLeaveTypes,
   approveLeaveRequest, rejectLeaveRequest, cancelLeaveRequest,
 } from '../api/leave'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import ListToolbar from '../components/ListToolbar'
 import { ListLoading } from '../components/ListStates'
 import LeaveRequestModal from '../components/LeaveRequestModal'

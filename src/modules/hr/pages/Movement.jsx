@@ -12,7 +12,7 @@ import {
 } from '@shared/lib/constants'
 import { fetchActiveEmployeeOptions } from '../api/employees'
 import { fetchLinkedEmployee, fetchMovements, approveMovement, rejectMovement, cancelMovement } from '../api/movements'
-import { useResourceList } from '../hooks/useResourceList'
+import { useResourceList } from '@shared/hooks/useResourceList'
 import ListToolbar from '../components/ListToolbar'
 import { ListLoading } from '../components/ListStates'
 import ApplyModal from '../components/ApplyModal'
