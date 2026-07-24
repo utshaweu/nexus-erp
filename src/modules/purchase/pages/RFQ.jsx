@@ -1,189 +1,59 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Plus, Search, Send, Eye, Trash2 } from 'lucide-react'
+import { Plus, Send, Eye, Trash2 } from 'lucide-react'
 import {
-  Button, Badge, Table, Thead, Th, Tbody, Tr, Td,
-  PageHeader, Card, Modal, Input, Select, Spinner,
+  Button, Badge, Table, Thead, Th, Tbody, Tr, Td, PageHeader, Card, Spinner,
 } from '@shared/components/ui'
 import PermissionGate from '@shared/components/PermissionGate'
 import Pagination from '@shared/components/Pagination'
 import toast from '@shared/lib/toast'
-import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import {
-  PAGE_SIZE_TABLE as PAGE_SIZE,
-  RFQ_STATUS as STATUS,
-  RFQ_STATUS_TABS as STATUS_TABS,
+  PAGE_SIZE_TABLE as PAGE_SIZE, RFQ_STATUS as STATUS, RFQ_STATUS_TABS as STATUS_TABS,
 } from '@shared/lib/constants'
+import { fetchRFQs, sendRFQ, deleteRFQ } from '../api/rfqs'
+import { fetchActiveVendorOptions } from '../api/vendors'
+import { useResourceList } from '@shared/hooks/useResourceList'
+import ListToolbar from '@shared/components/ListToolbar'
+import NewRFQModal from '../components/NewRFQModal'
 
-const rfqSchema = z.object({
-  vendor_id: z.string().min(1, 'Vendor is required'),
-  deadline:  z.string().min(1, 'Deadline is required'),
-  notes:     z.string().optional(),
-})
-
-function NewRFQModal({ open, onClose, vendors, onCreated }) {
-  const { tenantId } = useTenant()
-  const {
-    register, handleSubmit, reset,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: zodResolver(rfqSchema),
-    defaultValues: { vendor_id: '', deadline: '', notes: '' },
-  })
-
-  const onSubmit = async (data) => {
-    // Generate a unique RFQ number client-side (server-side sequence not defined in migration)
-    const year   = new Date().getFullYear()
-    const suffix = String(Date.now()).slice(-5)
-    const rfq_number = `RFQ-${year}-${suffix}`
-
-    const { error } = await supabase.from('rfqs').insert({
-      tenant_id:  tenantId,
-      rfq_number,
-      vendor_id:  data.vendor_id,
-      deadline:   data.deadline,
-      notes:      data.notes || null,
-      status:     'draft',
-    })
-
-    if (error) { toast.error(error.message); return }
-
-    toast.success('RFQ created.')
-    reset()
-    onCreated()
-    onClose()
-  }
-
-  const handleClose = () => { reset(); onClose() }
-
-  return (
-    <Modal open={open} onClose={handleClose} title="New Request for Quotation" size="md">
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
-        <div className="space-y-4">
-          <Select label="Vendor" error={errors.vendor_id?.message} {...register('vendor_id')}>
-            <option value="">Select vendor…</option>
-            {vendors.map(v => (
-              <option key={v.id} value={v.id}>{v.name}</option>
-            ))}
-          </Select>
-
-          <Input
-            label="Quotation Deadline"
-            type="date"
-            error={errors.deadline?.message}
-            {...register('deadline')}
-          />
-
-          <div>
-            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide block mb-1.5">
-              Notes
-            </label>
-            <textarea
-              rows={3}
-              className="w-full px-3 py-2 rounded-lg text-sm
-                         text-slate-900 dark:text-slate-200
-                         placeholder:text-slate-400 dark:placeholder:text-slate-600
-                         bg-white dark:bg-surface-900
-                         border border-surface-200 dark:border-surface-700
-                         hover:border-surface-300 dark:hover:border-surface-600
-                         focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500
-                         transition-colors resize-none"
-              placeholder="Requirements, specs…"
-              {...register('notes')}
-            />
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>
-              Cancel
-            </Button>
-            <Button type="submit" className="flex-1" loading={isSubmitting}>
-              Create RFQ
-            </Button>
-          </div>
-        </div>
-      </form>
-    </Modal>
-  )
-}
+const TABS = STATUS_TABS.map(s => ({ value: s, label: s === 'all' ? 'All' : STATUS[s]?.label }))
 
 export default function RFQ() {
   const { tenantId } = useTenant()
-  const [rfqs,         setRfqs]         = useState([])
-  const [vendors,      setVendors]      = useState([])
-  const [total,        setTotal]        = useState(0)
-  const [page,         setPage]         = useState(1)
-  const [search,       setSearch]       = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [loading,      setLoading]      = useState(true)
-  const [showNew,      setShowNew]      = useState(false)
+  const [vendors, setVendors] = useState([])
 
+  const fetchFn = useCallback(
+    ({ page, search, filter }) => fetchRFQs(tenantId, { page, search, filter }),
+    [tenantId]
+  )
+  const {
+    items: rfqs, total, page, setPage, search, setSearch, filter: statusFilter, setFilter: setStatusFilter,
+    loading, refetch, showModal: showNew, openNew, closeModal: closeNew,
+  } = useResourceList(fetchFn, [tenantId])
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
-  const fetchRFQs = useCallback(async () => {
-    if (!tenantId) return
-    setLoading(true)
-    try {
-      let query = supabase
-        .from('rfqs')
-        .select(
-          'id, rfq_number, status, deadline, quoted_amount, created_at, vendor:vendors(name)',
-          { count: 'exact' },
-        )
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
-        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
-
-      if (statusFilter !== 'all') query = query.eq('status', statusFilter)
-
-      if (search.trim()) query = query.ilike('rfq_number', `%${search.trim()}%`)
-
-      const { data, count, error } = await query
-      if (error) throw error
-      setRfqs(data || [])
-      setTotal(count || 0)
-    } catch (err) {
-      toast.error(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [tenantId, page, search, statusFilter])
-
-  const fetchVendors = useCallback(async () => {
-    if (!tenantId) return
-    const { data } = await supabase
-      .from('vendors')
-      .select('id, name')
-      .eq('tenant_id', tenantId)
-      .eq('status', 'active')
-      .order('name')
-    setVendors(data || [])
-  }, [tenantId])
-
-  useEffect(() => { fetchRFQs() },   [fetchRFQs])
-  useEffect(() => { fetchVendors() }, [fetchVendors])
-  useEffect(() => { setPage(1) },     [search, statusFilter])
+  useEffect(() => { fetchActiveVendorOptions(tenantId).then(setVendors) }, [tenantId])
 
   const handleSend = async (id, rfqNumber) => {
-    const { error } = await supabase
-      .from('rfqs')
-      .update({ status: 'sent' })
-      .eq('id', id)
-    if (error) { toast.error(error.message); return }
-    toast.success(`${rfqNumber} sent to vendor.`)
-    fetchRFQs()
+    try {
+      await sendRFQ(id)
+      toast.success(`${rfqNumber} sent to vendor.`)
+      refetch()
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   const handleDelete = async (id, rfqNumber) => {
     if (!window.confirm(`Delete ${rfqNumber}? This cannot be undone.`)) return
-    const { error } = await supabase.from('rfqs').delete().eq('id', id)
-    if (error) { toast.error(error.message); return }
-    toast.success('RFQ deleted.')
-    fetchRFQs()
+    try {
+      await deleteRFQ(id)
+      toast.success('RFQ deleted.')
+      refetch()
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   return (
@@ -194,7 +64,7 @@ export default function RFQ() {
         breadcrumb="Purchase / RFQ"
         actions={
           <PermissionGate action="create" moduleId="purchase">
-            <Button size="sm" onClick={() => setShowNew(true)}>
+            <Button size="sm" onClick={openNew}>
               <Plus className="w-4 h-4" />New RFQ
             </Button>
           </PermissionGate>
@@ -202,38 +72,10 @@ export default function RFQ() {
       />
 
       <Card>
-        {/* Toolbar */}
-        <div className="flex items-center gap-3 p-4 border-b border-surface-200 dark:border-surface-800 flex-wrap">
-          <div className="flex items-center gap-2 max-w-xs px-3 py-1.5 rounded-lg
-                          bg-surface-100 dark:bg-surface-800
-                          border border-surface-200 dark:border-surface-700">
-            <Search className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search RFQ number…"
-              className="bg-transparent text-sm text-slate-700 dark:text-slate-300
-                         placeholder:text-slate-400 dark:placeholder:text-slate-600
-                         flex-1 outline-none"
-            />
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {STATUS_TABS.map(s => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                  statusFilter === s
-                    ? 'bg-brand-600/10 dark:bg-brand-600/20 text-brand-700 dark:text-brand-300 border border-brand-600/20 dark:border-brand-600/30'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
-                }`}
-              >
-                {s === 'all' ? 'All' : STATUS[s]?.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <ListToolbar
+          search={search} onSearchChange={setSearch} placeholder="Search RFQ number…"
+          tabs={TABS} activeTab={statusFilter} onTabChange={setStatusFilter}
+        />
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
@@ -319,9 +161,9 @@ export default function RFQ() {
 
       <NewRFQModal
         open={showNew}
-        onClose={() => setShowNew(false)}
+        onClose={closeNew}
         vendors={vendors}
-        onCreated={fetchRFQs}
+        onCreated={refetch}
       />
     </div>
   )

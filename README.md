@@ -57,7 +57,8 @@ npm run preview   # Preview production build locally
 | `tenants` | Client companies (`id`, `name`, `slug`, `plan`, `status`) |
 | `tenant_users` | User ↔ tenant membership with role |
 | `tenant_modules` | Which modules each tenant has installed |
-| `tenant_user_permissions` | Per-user per-module action overrides |
+| `tenant_user_permissions` | Per-user, per-module/feature action overrides |
+| `module_catalog` | DB-driven module display metadata (name, icon, menuItems, features) |
 
 ## Architecture Overview
 
@@ -67,15 +68,16 @@ Every tenant (client company) has isolated modules, users, and permissions. All 
 
 ### Module System
 
-Features are delivered as self-contained **module manifests** registered at startup. Each manifest declares its menu items, routes, Zustand slice, and install/uninstall hooks. Modules can declare dependencies on other modules. Install/uninstall state is persisted to `tenant_modules` in Supabase with localStorage as offline fallback.
+Features are delivered as self-contained **modules** (`src/modules/<name>/{api,components,hooks,pages}/` + an `index.js` manifest). The manifest owns only the non-serialisable parts — routes, Zustand slice, install/uninstall hooks; display metadata (name, icon, menu items, features) lives in the `module_catalog` table and is merged in at login, editable without a code change. Install/uninstall state is persisted to `tenant_modules` in Supabase with localStorage as offline fallback.
 
 ### Permissions (RBAC)
 
-Three-level resolution per action (`view`, `create`, `edit`, `delete`, `approve`, `export`):
+Resolution per action (`view`, `create`, `edit`, `delete`, `approve`, `export`), optionally scoped to a feature within a module:
 
 1. Super admin → always allowed
-2. Explicit DB override in `tenant_user_permissions` → true/false
-3. Role default (viewer → user → manager → admin → owner)
+2. Explicit feature-level override in `tenant_user_permissions` → true/false
+3. Explicit module-level override → true/false
+4. Role default (viewer → user → manager → admin → owner)
 
 ### Theming
 
@@ -109,7 +111,10 @@ src/
 │   └── eventbus/     # Cross-module event bus
 ├── modules/          # Feature modules (one folder per module)
 │   └── <name>/
-│       ├── index.js  # Manifest (id, routes, menuItems, storeSlice…)
+│       ├── index.js  # Manifest (id, routes, storeSlice, install hooks)
+│       ├── api/       # Supabase queries
+│       ├── components/
+│       ├── hooks/
 │       └── pages/    # Page components
 └── shared/
     ├── components/   # ui.jsx — Button, Card, Table, Modal, Input…
@@ -119,29 +124,20 @@ src/
 
 ## Adding a New Module
 
-1. Create `src/modules/<name>/index.js` with the manifest:
+1. Create `src/modules/<name>/{api,components,hooks,pages}/` and an `index.js` manifest:
 
 ```js
 export default {
   id: 'my-module',
-  name: 'My Module',
-  description: '...',
-  version: '1.0.0',
-  icon: SomeLucideIcon,
-  color: '#6366f1',
-  category: 'Operations',
-  dependencies: [],           // other module ids
-  features: ['Feature A'],
-  menuItems: [
-    { id: 'my-page', label: 'Page', path: '/my-module', icon: 'LayoutDashboard',
-      requiredPermission: { action: 'view', moduleId: 'my-module' } },
-  ],
   routes: [
     { path: '/my-module', component: () => import('./pages/MyPage') },
   ],
+  storeSlice: (set) => ({ ... }),   // optional
+  onInstall: async () => {},
+  onUninstall: async () => {},
 }
 ```
 
-2. Add page components under `src/modules/<name>/pages/`.
-3. Register in `src/app/Shell.jsx` (add to the manifest array).
+2. Add a row to the `module_catalog` table (name, description, icon, color, category, menuItems, features) — required, not optional.
+3. Register the manifest in `src/app/Shell.jsx` (add to the manifest array).
 4. If using a new Lucide icon in `menuItems`, add it to `ICON_MAP` in `src/app/Sidebar.jsx`.

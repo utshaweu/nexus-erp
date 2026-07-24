@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Clock, CheckCircle2, XCircle, GitBranch, Plus } from 'lucide-react'
 import { StatCard, Card, Button, PageHeader, Spinner } from '@shared/components/ui'
@@ -20,18 +20,25 @@ export default function ApprovalDashboard() {
   const [stats, setStats]           = useState({ pending: 0, approved: 0, rejected: 0 })
   const [loading, setLoading]       = useState(true)
 
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+
   const fetchData = useCallback(async () => {
     if (!tenantId) return
     setLoading(true)
     try {
       const { pending, stats, recentActivity } = await fetchDashboardData(tenantId)
+      if (!mounted.current) return
       setPending(pending)
       setStats(stats)
       setRecent(recentActivity)
     } catch (err) {
-      toast.error(err.message)
+      if (mounted.current) toast.error(err.message)
     } finally {
-      setLoading(false)
+      if (mounted.current) setLoading(false)
     }
   }, [tenantId])
 

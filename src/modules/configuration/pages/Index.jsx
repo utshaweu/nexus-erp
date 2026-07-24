@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom'
 import { Users, Package, CalendarDays, Building2, Settings, ChevronRight } from 'lucide-react'
 import { StatCard, Card, PageHeader, Badge } from '@shared/components/ui'
 import { useTenant } from '@core/tenant/TenantContext'
-import { supabase } from '@/shared/api/supabase'
-import registry from '@core/registry/ModuleRegistry'
+import { fetchConfigStats } from '../api/dashboard'
 
 const STATUS_COLOR = { active: 'green', suspended: 'red', trial: 'yellow' }
 const PLAN_COLOR   = { starter: 'default', growth: 'blue', enterprise: 'purple' }
@@ -43,26 +42,7 @@ export default function ConfigurationIndex() {
 
   useEffect(() => {
     if (!tenantId) return
-    Promise.all([
-      supabase
-        .from('tenant_users')
-        .select('id', { count: 'exact', head: true })
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true),
-      supabase
-        .from('fiscal_periods')
-        .select('id, status')
-        .eq('tenant_id', tenantId),
-    ]).then(([usersRes, periodsRes]) => {
-      const all = periodsRes.data ?? []
-      setStats({
-        users:       usersRes.count ?? 0,
-        modules:     registry.getInstalled().length,
-        periods:     all.length,
-        openPeriods: all.filter(p => p.status === 'open').length,
-      })
-      setLoading(false)
-    })
+    fetchConfigStats(tenantId).then(s => { setStats(s); setLoading(false) })
   }, [tenantId])
 
   return (
