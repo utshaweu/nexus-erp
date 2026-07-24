@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { ShoppingCart, TrendingUp, Clock, CheckCircle, Plus } from 'lucide-react'
 import {
@@ -7,83 +7,31 @@ import {
 } from '@shared/components/ui'
 import PermissionGate from '@shared/components/PermissionGate'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import { PURCHASE_ORDER_STATUS as STATUS } from '@shared/lib/constants'
-
-function buildMonthBuckets() {
-  const now = new Date()
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
-    return {
-      month: d.toLocaleString('default', { month: 'short' }),
-      year:  d.getFullYear(),
-      m:     d.getMonth() + 1,
-      spend: 0,
-    }
-  })
-}
+import { fetchPurchaseDashboard } from '../api/dashboard'
 
 export default function PurchaseDashboard() {
   const { tenantId } = useTenant()
   const [stats,   setStats]   = useState({ total: 0, pending: 0, approved: 0, totalSpend: 0 })
   const [orders,  setOrders]  = useState([])
-  const [chart,   setChart]   = useState(buildMonthBuckets().map(({ month }) => ({ month, spend: 0 })))
+  const [chart,   setChart]   = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!tenantId) return
-    load()
-  }, [tenantId])
-
-  async function load() {
     setLoading(true)
     try {
-      const sixMonthsAgo = new Date()
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
-      sixMonthsAgo.setDate(1)
-      const cutoff = sixMonthsAgo.toISOString().split('T')[0]
-
-      const [allRes, recentRes, chartRes] = await Promise.all([
-        supabase
-          .from('purchase_orders')
-          .select('status, total_amount')
-          .eq('tenant_id', tenantId),
-        supabase
-          .from('purchase_orders')
-          .select('id, order_number, status, order_date, total_amount, vendor:vendors(name)')
-          .eq('tenant_id', tenantId)
-          .order('created_at', { ascending: false })
-          .limit(5),
-        supabase
-          .from('purchase_orders')
-          .select('order_date, total_amount')
-          .eq('tenant_id', tenantId)
-          .gte('order_date', cutoff),
-      ])
-
-      const all = allRes.data || []
-      setStats({
-        total:      all.length,
-        pending:    all.filter(o => o.status === 'pending').length,
-        approved:   all.filter(o => o.status === 'approved').length,
-        totalSpend: all.reduce((s, o) => s + (Number(o.total_amount) || 0), 0),
-      })
-
-      setOrders(recentRes.data || [])
-
-      const buckets = buildMonthBuckets()
-      ;(chartRes.data || []).forEach(o => {
-        if (!o.order_date) return
-        const d = new Date(o.order_date)
-        const idx = buckets.findIndex(b => b.m === d.getMonth() + 1 && b.year === d.getFullYear())
-        if (idx >= 0) buckets[idx].spend += Number(o.total_amount) || 0
-      })
-      setChart(buckets.map(({ month, spend }) => ({ month, spend })))
+      const data = await fetchPurchaseDashboard(tenantId)
+      setStats(data.stats)
+      setOrders(data.orders)
+      setChart(data.chart)
     } finally {
       setLoading(false)
     }
-  }
+  }, [tenantId])
+
+  useEffect(() => { load() }, [load])
 
   if (loading) {
     return (

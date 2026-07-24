@@ -1,180 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import {
-  PageHeader, Badge, Card, Button, Modal, Input, Select,
-  Table, Thead, Th, Tbody, Tr, Td, Spinner,
+  PageHeader, Badge, Card, Button, Table, Thead, Th, Tbody, Tr, Td, Spinner,
 } from '@shared/components/ui'
 import { CheckCircle, XCircle, Printer, ArrowLeft, Package, Plus, Pencil, Trash2, Send } from 'lucide-react'
-import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import toast from '@shared/lib/toast'
 import PermissionGate from '@shared/components/PermissionGate'
 import { PURCHASE_ORDER_STATUS as STATUS_BADGE } from '@shared/lib/constants'
-import { submitForApproval } from '@shared/lib/approvalWorkflow'
-
-const lineSchema = z.object({
-  product_name: z.string().trim().min(1, 'Product name is required'),
-  quantity:     z.coerce.number({ invalid_type_error: 'Enter a number' }).positive('Must be > 0'),
-  unit_price:   z.coerce.number({ invalid_type_error: 'Enter a number' }).min(0, 'Must be ≥ 0'),
-  tax_rate:     z.coerce.number({ invalid_type_error: 'Enter a number' }).min(0).max(100).default(0),
-})
-
-// ── LineModal ─────────────────────────────────────────────────────────────────
-
-function LineModal({ open, onClose, line, lines = [], orderId, tenantId, onSaved }) {
-  const isEdit = Boolean(line)
-  const {
-    register, handleSubmit, reset, setValue,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: zodResolver(lineSchema),
-    defaultValues: { product_name: '', quantity: 1, unit_price: 0, tax_rate: 0 },
-  })
-
-  // Inventory products for the dropdown
-  const [allProducts, setAllProducts] = useState([])
-  const [selectedId,  setSelectedId]  = useState('')
-
-  // Load active inventory products once the modal opens, then seed the form
-  useEffect(() => {
-    if (!open) return
-    let active = true
-    ;(async () => {
-      const { data } = await supabase
-        .from('products')
-        .select('id, name, cost_price')
-        .eq('tenant_id', tenantId)
-        .eq('status', 'active')
-        .order('name')
-      if (!active) return
-      const list = data || []
-      setAllProducts(list)
-
-      const vals = line
-        ? { product_name: line.product_name, quantity: Number(line.quantity), unit_price: Number(line.unit_price), tax_rate: Number(line.tax_rate) || 0 }
-        : { product_name: '', quantity: 1, unit_price: 0, tax_rate: 0 }
-      reset(vals)
-
-      // Pre-select the matching inventory product when editing
-      const match = line ? list.find(p => p.name === line.product_name) : null
-      setSelectedId(match ? match.id : '')
-    })()
-    return () => { active = false }
-  }, [open, line, reset, tenantId])
-
-  const handleProductChange = (e) => {
-    const val = e.target.value
-    setSelectedId(val)
-    const p = allProducts.find(prod => prod.id === val)
-    if (p) {
-      setValue('product_name', p.name)
-      setValue('unit_price', Number(p.cost_price) || 0)
-    } else {
-      setValue('product_name', '')
-    }
-  }
-
-  const onSubmit = async (data) => {
-    // Block duplicate products on the same order (ignore the row being edited)
-    const dupe = (lines || []).some(l =>
-      l.id !== line?.id &&
-      (l.product_name || '').trim().toLowerCase() === data.product_name.trim().toLowerCase()
-    )
-    if (dupe) { toast.error('This item is already on the order.'); return }
-
-    const qty   = Number(data.quantity)
-    const price = Number(data.unit_price)
-    const tax   = Number(data.tax_rate) || 0
-    const total = qty * price + qty * price * tax / 100
-
-    if (isEdit) {
-      const { error } = await supabase
-        .from('purchase_order_lines')
-        .update({ product_name: data.product_name, quantity: qty, unit_price: price, tax_rate: tax, total_price: total })
-        .eq('id', line.id)
-      if (error) { toast.error(error.message); return }
-      toast.success('Line updated.')
-    } else {
-      const { error } = await supabase
-        .from('purchase_order_lines')
-        .insert({ tenant_id: tenantId, purchase_order_id: orderId, product_name: data.product_name, quantity: qty, unit_price: price, tax_rate: tax, total_price: total })
-      if (error) { toast.error(error.message); return }
-      toast.success('Line added.')
-    }
-    onSaved()
-    onClose()
-  }
-
-  const handleClose = () => { reset(); setSelectedId(''); onClose() }
-
-  return (
-    <Modal open={open} onClose={handleClose} title={isEdit ? 'Edit Line Item' : 'Add Line Item'} size="md">
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
-        <div className="space-y-4">
-          {/* Product — choose from inventory */}
-          <div>
-            <Select
-              label="Product / Description"
-              value={selectedId}
-              onChange={handleProductChange}
-            >
-              <option value="">Select a product…</option>
-              {allProducts.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </Select>
-            {errors.product_name && (
-              <p className="text-red-500 dark:text-red-400 text-xs mt-1">{errors.product_name.message}</p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <Input
-              label="Quantity"
-              type="number"
-              step="0.01"
-              min="0.01"
-              error={errors.quantity?.message}
-              {...register('quantity')}
-            />
-            <Input
-              label="Unit Price ($)"
-              type="number"
-              step="0.01"
-              min="0"
-              error={errors.unit_price?.message}
-              {...register('unit_price')}
-            />
-            <Input
-              label="Tax %"
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              placeholder="0"
-              error={errors.tax_rate?.message}
-              {...register('tax_rate')}
-            />
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>
-              Cancel
-            </Button>
-            <Button type="submit" className="flex-1" loading={isSubmitting}>
-              {isEdit ? 'Save Changes' : 'Add Line'}
-            </Button>
-          </div>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-// ── PurchaseOrderDetail ───────────────────────────────────────────────────────
+import {
+  fetchPurchaseOrderDetail, deletePOLine, updatePOStatus, submitPOForApproval,
+} from '../api/purchaseOrders'
+import POLineModal from '../components/POLineModal'
+import VendorInfoCard from '../components/VendorInfoCard'
 
 export default function PurchaseOrderDetail() {
   const { id }       = useParams()
@@ -190,85 +28,53 @@ export default function PurchaseOrderDetail() {
   const loadOrder = useCallback(async () => {
     if (!id || !tenantId) return
     setLoading(true)
-    const [orderRes, linesRes] = await Promise.all([
-      supabase
-        .from('purchase_orders')
-        .select('*, vendor:vendors(name, email, phone, contact_name)')
-        .eq('id', id)
-        .eq('tenant_id', tenantId)
-        .single(),
-      supabase
-        .from('purchase_order_lines')
-        .select('*')
-        .eq('purchase_order_id', id)
-        .eq('tenant_id', tenantId)
-        .order('id'),
-    ])
-    if (orderRes.error) { toast.error('Order not found.'); setLoading(false); return }
-    setOrder(orderRes.data)
-    setLines(linesRes.data || [])
-    setLoading(false)
+    try {
+      const { order, lines } = await fetchPurchaseOrderDetail(id, tenantId)
+      setOrder(order)
+      setLines(lines)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setLoading(false)
+    }
   }, [id, tenantId])
 
   useEffect(() => { loadOrder() }, [loadOrder])
 
-  const syncTotals = async () => {
-    const { data: fresh } = await supabase
-      .from('purchase_order_lines')
-      .select('quantity, unit_price, tax_rate')
-      .eq('purchase_order_id', id)
-      .eq('tenant_id', tenantId)
-    const all      = fresh || []
-    const subtotal = all.reduce((a, l) => a + Number(l.quantity) * Number(l.unit_price), 0)
-    const taxAmt   = all.reduce((a, l) => a + Number(l.quantity) * Number(l.unit_price) * ((Number(l.tax_rate) || 0) / 100), 0)
-    await supabase
-      .from('purchase_orders')
-      .update({ subtotal, tax_amount: taxAmt, total_amount: subtotal + taxAmt })
-      .eq('id', id)
-  }
-
-  const handleLineSaved = async () => {
-    await syncTotals()
-    await loadOrder()
-  }
-
   const handleDeleteLine = async (lineId) => {
     if (!window.confirm('Remove this line item?')) return
-    const { error } = await supabase.from('purchase_order_lines').delete().eq('id', lineId)
-    if (error) { toast.error(error.message); return }
-    toast.success('Line removed.')
-    await handleLineSaved()
+    try {
+      await deletePOLine(lineId, id, tenantId)
+      toast.success('Line removed.')
+      loadOrder()
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   const openAddLine = () => { setEditingLine(null); setShowLineModal(true) }
   const openEditLine = (l) => { setEditingLine(l); setShowLineModal(true) }
   const closeLineModal = () => { setShowLineModal(false); setEditingLine(null) }
 
-  const updateStatus = async (status, { silent = false } = {}) => {
-    const { error } = await supabase
-      .from('purchase_orders')
-      .update({ status })
-      .eq('id', id)
-    if (error) { toast.error(error.message); return }
-    if (!silent) toast.success(`Order marked as ${status}.`)
-    setOrder(o => ({ ...o, status }))
+  const updateStatus = async (status) => {
+    try {
+      await updatePOStatus(id, status)
+      toast.success(`Order marked as ${status}.`)
+      setOrder(o => ({ ...o, status }))
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   const handleSubmitForApproval = async () => {
     try {
-      const result = await submitForApproval({
-        tenantId, module: 'purchase', recordId: id, recordType: 'purchase_order',
-        title: `Purchase Order ${order.order_number}`,
-        description: `Vendor: ${order.vendor?.name || '—'} · ${lines.length} line item(s)`,
-        amount: total, priority: total > 5000 ? 'high' : 'normal',
-        requestedBy: window.__erp_user__?.id,
-      })
-      await updateStatus('pending', { silent: true })
+      const result = await submitPOForApproval(tenantId, order, lines, total, window.__erp_user__?.id)
       toast.success(
         result.submitted
           ? `Submitted for approval as ${result.request.request_number}.`
           : 'Order marked as pending.'
       )
+      setOrder(o => ({ ...o, status: 'pending' }))
     } catch (err) {
       toast.error(err.message)
     }
@@ -355,7 +161,6 @@ export default function PurchaseOrderDetail() {
       />
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Order lines */}
         <div className="lg:col-span-2">
           <Card>
             <div className="p-5">
@@ -421,7 +226,6 @@ export default function PurchaseOrderDetail() {
                 </Table>
               )}
 
-              {/* Totals */}
               <div className="mt-4 pt-4 border-t border-surface-200 dark:border-surface-800 space-y-1.5 text-sm">
                 <div className="flex justify-between text-slate-500 dark:text-slate-400">
                   <span>Subtotal</span>
@@ -440,7 +244,6 @@ export default function PurchaseOrderDetail() {
           </Card>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-4">
           <Card className="p-5">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300 mb-4">Order Info</h3>
@@ -480,23 +283,7 @@ export default function PurchaseOrderDetail() {
             </div>
           </Card>
 
-          {order.vendor && (
-            <Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300 mb-3">Vendor</h3>
-              <div className="space-y-1.5 text-sm">
-                <p className="font-medium text-slate-900 dark:text-slate-200">{order.vendor.name}</p>
-                {order.vendor.contact_name && (
-                  <p className="text-slate-400">{order.vendor.contact_name}</p>
-                )}
-                {order.vendor.email && (
-                  <p className="text-slate-500">{order.vendor.email}</p>
-                )}
-                {order.vendor.phone && (
-                  <p className="text-slate-500">{order.vendor.phone}</p>
-                )}
-              </div>
-            </Card>
-          )}
+          <VendorInfoCard vendor={order.vendor} />
 
           {order.notes && (
             <Card className="p-5">
@@ -507,14 +294,14 @@ export default function PurchaseOrderDetail() {
         </div>
       </div>
 
-      <LineModal
+      <POLineModal
         open={showLineModal}
         onClose={closeLineModal}
         line={editingLine}
         lines={lines}
         orderId={id}
         tenantId={tenantId}
-        onSaved={handleLineSaved}
+        onSaved={loadOrder}
       />
     </div>
   )

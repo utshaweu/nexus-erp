@@ -1,147 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import {
-  PageHeader, Badge, Card, Button, Modal, Input, Select,
-  Table, Thead, Th, Tbody, Tr, Td, Spinner,
+  PageHeader, Badge, Card, Button, Table, Thead, Th, Tbody, Tr, Td, Spinner,
 } from '@shared/components/ui'
 import { CheckCircle, XCircle, Printer, ArrowLeft, Package, Plus, Pencil, Trash2, Send, ShoppingCart } from 'lucide-react'
-import { supabase } from '@shared/api/supabase'
 import { useTenant } from '@core/tenant/TenantContext'
 import toast from '@shared/lib/toast'
 import PermissionGate from '@shared/components/PermissionGate'
 import { RFQ_STATUS as STATUS_BADGE } from '@shared/lib/constants'
-
-const lineSchema = z.object({
-  product_name: z.string().trim().min(1, 'Product is required'),
-  quantity:     z.coerce.number({ invalid_type_error: 'Enter a number' }).positive('Must be > 0'),
-})
-
-// ── LineModal ─────────────────────────────────────────────────────────────────
-
-function LineModal({ open, onClose, line, lines = [], rfqId, tenantId, onSaved }) {
-  const isEdit = Boolean(line)
-  const {
-    register, handleSubmit, reset, setValue,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: zodResolver(lineSchema),
-    defaultValues: { product_name: '', quantity: 1 },
-  })
-
-  // Inventory products for the dropdown
-  const [allProducts, setAllProducts] = useState([])
-  const [selectedId,  setSelectedId]  = useState('')
-
-  // Load active inventory products once the modal opens, then seed the form
-  useEffect(() => {
-    if (!open) return
-    let active = true
-    ;(async () => {
-      const { data } = await supabase
-        .from('products')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .eq('status', 'active')
-        .order('name')
-      if (!active) return
-      const list = data || []
-      setAllProducts(list)
-
-      reset(line
-        ? { product_name: line.product_name, quantity: Number(line.quantity) }
-        : { product_name: '', quantity: 1 })
-
-      const match = line ? list.find(p => p.name === line.product_name) : null
-      setSelectedId(match ? match.id : '')
-    })()
-    return () => { active = false }
-  }, [open, line, reset, tenantId])
-
-  const handleProductChange = (e) => {
-    const val = e.target.value
-    setSelectedId(val)
-    const p = allProducts.find(prod => prod.id === val)
-    setValue('product_name', p ? p.name : '')
-  }
-
-  const onSubmit = async (data) => {
-    // Block duplicate products on the same RFQ (ignore the row being edited)
-    const dupe = (lines || []).some(l =>
-      l.id !== line?.id &&
-      (l.product_name || '').trim().toLowerCase() === data.product_name.trim().toLowerCase()
-    )
-    if (dupe) { toast.error('This item is already on the RFQ.'); return }
-
-    const qty = Number(data.quantity)
-
-    if (isEdit) {
-      const { error } = await supabase
-        .from('rfq_lines')
-        .update({ product_name: data.product_name, quantity: qty })
-        .eq('id', line.id)
-      if (error) { toast.error(error.message); return }
-      toast.success('Line updated.')
-    } else {
-      const { error } = await supabase
-        .from('rfq_lines')
-        .insert({ tenant_id: tenantId, rfq_id: rfqId, product_name: data.product_name, quantity: qty })
-      if (error) { toast.error(error.message); return }
-      toast.success('Line added.')
-    }
-    onSaved()
-    onClose()
-  }
-
-  const handleClose = () => { reset(); setSelectedId(''); onClose() }
-
-  return (
-    <Modal open={open} onClose={handleClose} title={isEdit ? 'Edit Line Item' : 'Add Line Item'} size="md">
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
-        <div className="space-y-4">
-          {/* Product — choose from inventory */}
-          <div>
-            <Select
-              label="Product"
-              value={selectedId}
-              onChange={handleProductChange}
-            >
-              <option value="">Select a product…</option>
-              {allProducts.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </Select>
-            {errors.product_name && (
-              <p className="text-red-500 dark:text-red-400 text-xs mt-1">{errors.product_name.message}</p>
-            )}
-          </div>
-
-          <Input
-            label="Quantity"
-            type="number"
-            step="0.01"
-            min="0.01"
-            error={errors.quantity?.message}
-            {...register('quantity')}
-          />
-
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" className="flex-1" onClick={handleClose}>
-              Cancel
-            </Button>
-            <Button type="submit" className="flex-1" loading={isSubmitting}>
-              {isEdit ? 'Save Changes' : 'Add Line'}
-            </Button>
-          </div>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-// ── RFQDetail ───────────────────────────────────────────────────────────────
+import {
+  fetchRFQDetail, deleteRFQLine, updateRFQStatus, convertRfqToPurchaseOrder,
+} from '../api/rfqs'
+import RFQLineModal from '../components/RFQLineModal'
+import VendorInfoCard from '../components/VendorInfoCard'
 
 export default function RFQDetail() {
   const { id }       = useParams()
@@ -159,34 +30,28 @@ export default function RFQDetail() {
   const loadRfq = useCallback(async () => {
     if (!id || !tenantId) return
     setLoading(true)
-    const [rfqRes, linesRes] = await Promise.all([
-      supabase
-        .from('rfqs')
-        .select('*, vendor:vendors(name, email, phone, contact_name)')
-        .eq('id', id)
-        .eq('tenant_id', tenantId)
-        .single(),
-      supabase
-        .from('rfq_lines')
-        .select('*')
-        .eq('rfq_id', id)
-        .eq('tenant_id', tenantId)
-        .order('created_at'),
-    ])
-    if (rfqRes.error) { toast.error('RFQ not found.'); setLoading(false); return }
-    setRfq(rfqRes.data)
-    setLines(linesRes.data || [])
-    setLoading(false)
+    try {
+      const { rfq, lines } = await fetchRFQDetail(id, tenantId)
+      setRfq(rfq)
+      setLines(lines)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setLoading(false)
+    }
   }, [id, tenantId])
 
   useEffect(() => { loadRfq() }, [loadRfq])
 
   const handleDeleteLine = async (lineId) => {
     if (!window.confirm('Remove this line item?')) return
-    const { error } = await supabase.from('rfq_lines').delete().eq('id', lineId)
-    if (error) { toast.error(error.message); return }
-    toast.success('Line removed.')
-    loadRfq()
+    try {
+      await deleteRFQLine(lineId)
+      toast.success('Line removed.')
+      loadRfq()
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   const openAddLine    = () => { setEditingLine(null); setShowLineModal(true) }
@@ -194,75 +59,24 @@ export default function RFQDetail() {
   const closeLineModal = () => { setShowLineModal(false); setEditingLine(null) }
 
   const updateStatus = async (status) => {
-    const { error } = await supabase
-      .from('rfqs')
-      .update({ status })
-      .eq('id', id)
-    if (error) { toast.error(error.message); return }
-    toast.success(`RFQ marked as ${STATUS_BADGE[status]?.label || status}.`)
-    setRfq(r => ({ ...r, status }))
+    try {
+      await updateRFQStatus(id, status)
+      toast.success(`RFQ marked as ${STATUS_BADGE[status]?.label || status}.`)
+      setRfq(r => ({ ...r, status }))
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
-  // Convert RFQ → new draft Purchase Order, copy line items, mark RFQ converted
   const convertToPO = async () => {
     if (!window.confirm('Convert this RFQ to a purchase order?')) return
     setConverting(true)
     try {
-      const { data: orderNumber, error: rpcErr } = await supabase.rpc('generate_po_number')
-      if (rpcErr) { toast.error('Failed to generate PO number.'); return }
-
-      const today = new Date().toISOString().slice(0, 10)
-      const { data: po, error: poErr } = await supabase
-        .from('purchase_orders')
-        .insert({
-          tenant_id:    tenantId,
-          order_number: orderNumber,
-          vendor_id:    rfq.vendor_id,
-          reference:    rfq.rfq_number,
-          order_date:   today,
-          status:       'draft',
-          notes:        rfq.notes || null,
-        })
-        .select('id')
-        .single()
-      if (poErr) { toast.error(poErr.message); return }
-
-      if (lines.length > 0) {
-        // Pull cost prices from inventory so PO lines carry a unit price
-        const { data: prods } = await supabase
-          .from('products')
-          .select('name, cost_price')
-          .eq('tenant_id', tenantId)
-          .in('name', lines.map(l => l.product_name))
-        const priceByName = new Map((prods || []).map(p => [p.name, Number(p.cost_price) || 0]))
-
-        const poLines = lines.map(l => {
-          const qty   = Number(l.quantity)
-          const price = priceByName.get(l.product_name) || 0
-          return {
-            tenant_id:         tenantId,
-            purchase_order_id: po.id,
-            product_name:      l.product_name,
-            quantity:          qty,
-            unit_price:        price,
-            tax_rate:          0,
-            total_price:       qty * price,
-          }
-        })
-        const { error: linesErr } = await supabase.from('purchase_order_lines').insert(poLines)
-        if (linesErr) { toast.error(linesErr.message); return }
-
-        // Sync PO header totals so the list/detail reflect the copied lines
-        const subtotal = poLines.reduce((a, l) => a + l.total_price, 0)
-        await supabase
-          .from('purchase_orders')
-          .update({ subtotal, tax_amount: 0, total_amount: subtotal })
-          .eq('id', po.id)
-      }
-
-      await supabase.from('rfqs').update({ status: 'converted' }).eq('id', id)
+      const { orderNumber, poId } = await convertRfqToPurchaseOrder(tenantId, rfq, lines)
       toast.success(`Converted to ${orderNumber}.`)
-      navigate(`/purchase/orders/${po.id}`)
+      navigate(`/purchase/orders/${poId}`)
+    } catch (err) {
+      toast.error(err.message)
     } finally {
       setConverting(false)
     }
@@ -344,7 +158,6 @@ export default function RFQDetail() {
       />
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* RFQ lines */}
         <div className="lg:col-span-2">
           <Card>
             <div className="p-5">
@@ -404,7 +217,6 @@ export default function RFQDetail() {
           </Card>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-4">
           <Card className="p-5">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300 mb-4">RFQ Info</h3>
@@ -438,23 +250,7 @@ export default function RFQDetail() {
             </div>
           </Card>
 
-          {rfq.vendor && (
-            <Card className="p-5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-300 mb-3">Vendor</h3>
-              <div className="space-y-1.5 text-sm">
-                <p className="font-medium text-slate-900 dark:text-slate-200">{rfq.vendor.name}</p>
-                {rfq.vendor.contact_name && (
-                  <p className="text-slate-700 dark:text-slate-400">{rfq.vendor.contact_name}</p>
-                )}
-                {rfq.vendor.email && (
-                  <p className="text-slate-500">{rfq.vendor.email}</p>
-                )}
-                {rfq.vendor.phone && (
-                  <p className="text-slate-500">{rfq.vendor.phone}</p>
-                )}
-              </div>
-            </Card>
-          )}
+          <VendorInfoCard vendor={rfq.vendor} />
 
           {rfq.notes && (
             <Card className="p-5">
@@ -465,7 +261,7 @@ export default function RFQDetail() {
         </div>
       </div>
 
-      <LineModal
+      <RFQLineModal
         open={showLineModal}
         onClose={closeLineModal}
         line={editingLine}
