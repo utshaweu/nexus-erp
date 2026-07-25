@@ -129,11 +129,13 @@ export function AuthProvider({ children }) {
 
   const signOut = () => supabase.auth.signOut()
 
+  const changePassword = (password) => supabase.auth.updateUser({ password })
+
   const { user } = useStore()
 
   return createElement(
     AuthContext.Provider,
-    { value: { user, loading, signIn, signUp, signOut } },
+    { value: { user, loading, signIn, signUp, signOut, changePassword } },
     children
   )
 }
