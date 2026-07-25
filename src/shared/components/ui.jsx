@@ -1,7 +1,7 @@
 import { clsx } from 'clsx'
 import { forwardRef, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Loader2, X } from 'lucide-react'
+import { Loader2, X, Eye, EyeOff } from 'lucide-react'
 
 // ─── Button ────────────────────────────────────────────────────────────────
 const buttonVariants = {
@@ -157,6 +157,51 @@ export const Input = forwardRef(({ label, error, className = '', ...props }, ref
   </div>
 ))
 Input.displayName = 'Input'
+
+// ─── Password Input (with show/hide toggle) ────────────────────────────────
+export const PasswordInput = forwardRef(({ label, error, className = '', ...props }, ref) => {
+  const [show, setShow] = useState(false)
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {label && (
+        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+          {label}
+        </label>
+      )}
+      <div className="relative">
+        <input
+          ref={ref}
+          type={show ? 'text' : 'password'}
+          className={clsx(
+            'w-full px-3 py-2 pr-10 rounded-lg text-sm',
+            'text-slate-900 dark:text-slate-200',
+            'placeholder:text-slate-400 dark:placeholder:text-slate-600',
+            'bg-white dark:bg-surface-900',
+            'border border-surface-200 dark:border-surface-700',
+            'hover:border-surface-300 dark:hover:border-surface-600',
+            'focus:outline-none focus:ring-1 focus:ring-brand-500 focus:border-brand-500',
+            'transition-colors',
+            error && 'border-red-500 focus:ring-red-500',
+            className
+          )}
+          {...props}
+        />
+        <button
+          type="button"
+          onClick={() => setShow(s => !s)}
+          className="absolute right-3 top-1/2 -translate-y-1/2
+                     text-slate-400 hover:text-slate-600
+                     dark:text-slate-500 dark:hover:text-slate-300"
+        >
+          {show ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
+    </div>
+  )
+})
+PasswordInput.displayName = 'PasswordInput'
 
 // ─── Select ────────────────────────────────────────────────────────────────
 export const Select = forwardRef(({ label, error, className = '', children, ...props }, ref) => (

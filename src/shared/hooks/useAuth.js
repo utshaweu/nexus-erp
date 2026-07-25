@@ -32,6 +32,7 @@ export function AuthProvider({ children }) {
   const permissionCtx = useContext(PermissionContext)
   const navigate      = useNavigate()
   const [loading, setLoading] = useState(true)
+  const [isRecovery, setIsRecovery] = useState(false)
 
   // Deduplication guard: skip bootstrap if the same access_token fires again
   // (Supabase can fire both INITIAL_SESSION and SIGNED_IN for the same session)
@@ -40,6 +41,16 @@ export function AuthProvider({ children }) {
   // ── Bootstrap ─────────────────────────────────────────────────
   const bootstrap = async (session) => {
     const rawUser = session.user
+
+    // A re-authentication of the SAME already-bootstrapped user (e.g. the
+    // reverification step in ChangePasswordModal) issues a new access token
+    // and fires SIGNED_IN again. Skip the tenant/module/permission reload —
+    // it's already loaded — so the app doesn't flash a full-screen loader
+    // and unmount whatever the user was doing. Must be checked BEFORE the
+    // globals below are overwritten with the new session's data.
+    const alreadyBootstrapped =
+      window.__erp_user__?.id === rawUser.id &&
+      (window.__erp_user__.isSuperAdmin || window.__erp_tenant__ != null)
 
     const user = {
       id:           rawUser.id,
@@ -51,6 +62,8 @@ export function AuthProvider({ children }) {
     setUser(user)
     setSession(session)
     window.__erp_user__ = user
+
+    if (alreadyBootstrapped) return
 
     // Load the global module catalogue metadata (DB-driven manifests).
     // Safe no-op if the table is missing — code manifests are the fallback.
@@ -79,6 +92,7 @@ export function AuthProvider({ children }) {
   // ── Teardown ──────────────────────────────────────────────────
   const teardown = useCallback(() => {
     lastTokenRef.current = null
+    setIsRecovery(false)
     permissionCtx.clearPermissions()
     registry.clearActiveTenant()
     tenantCtx.clearTenant()
@@ -103,6 +117,10 @@ export function AuthProvider({ children }) {
               await bootstrap(session)
             }
           }
+        } else if (event === 'PASSWORD_RECOVERY') {
+          // Recovery link opened — hold off on the tenant bootstrap chain
+          // until AuthGuard's ResetPasswordPage sets a new password.
+          setIsRecovery(true)
         } else if (event === 'SIGNED_OUT') {
           teardown()
         }
@@ -131,11 +149,14 @@ export function AuthProvider({ children }) {
 
   const changePassword = (password) => supabase.auth.updateUser({ password })
 
+  const resetPasswordForEmail = (email) =>
+    supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })
+
   const { user } = useStore()
 
   return createElement(
     AuthContext.Provider,
-    { value: { user, loading, signIn, signUp, signOut, changePassword } },
+    { value: { user, loading, isRecovery, signIn, signUp, signOut, changePassword, resetPasswordForEmail } },
     children
   )
 }
