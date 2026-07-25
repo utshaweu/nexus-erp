@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Loader2, Eye, EyeOff } from 'lucide-react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Loader2 } from 'lucide-react'
 import { useAuth } from '@shared/hooks/useAuth'
 import { useTenant } from '@core/tenant/TenantContext'
 import { usePermissions } from '@core/permissions/PermissionContext'
-import { Button, Input } from '@shared/components/ui'
+import { Button, Input, PasswordInput } from '@shared/components/ui'
 import toast from '@shared/lib/toast'
 
 // ── Login Page ────────────────────────────────────────────────
 function LoginPage() {
-  const { signIn, signUp } = useAuth()
-  const [mode, setMode]     = useState('login')
-  const [showPw, setShowPw] = useState(false)
+  const { signIn, signUp, resetPasswordForEmail } = useAuth()
+  const [mode, setMode] = useState('login')
 
   const {
     register,
@@ -19,7 +20,7 @@ function LoginPage() {
     reset,
     formState: { errors, isSubmitting },
   } = useForm({
-    defaultValues: { email: 'superadmin@nexuserp.com', password: 'superadmin', name: '' },
+    defaultValues: { email: '', password: '', name: '' },
   })
 
   const switchMode = (next) => {
@@ -32,10 +33,15 @@ function LoginPage() {
       const { error } = await signIn(data.email, data.password)
       if (error) toast.error(error.message)
       else toast.success(`Welcome back, ${data.email}!`)
-    } else {
+    } else if (mode === 'register') {
       const { error } = await signUp(data.email, data.password, data.name)
       if (error) toast.error(error.message)
       else toast.info(`Confirmation email sent to ${data.email}. Please check your inbox.`)
+    } else {
+      const { error } = await resetPasswordForEmail(data.email)
+      if (error) toast.error(error.message)
+      else toast.success(`Password reset link sent to ${data.email}.`)
+      switchMode('login')
     }
   }
 
@@ -67,7 +73,9 @@ function LoginPage() {
         <div className="rounded-2xl border border-slate-200 bg-white/80 backdrop-blur p-8
                         dark:border-surface-800 dark:bg-surface-900/60">
           <h2 className="font-display font-semibold text-slate-800 dark:text-slate-100 text-lg mb-6">
-            {mode === 'login' ? 'Sign in to your account' : 'Create an account'}
+            {mode === 'login'    && 'Sign in to your account'}
+            {mode === 'register' && 'Create an account'}
+            {mode === 'forgot'   && 'Reset your password'}
           </h2>
 
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
@@ -96,68 +104,138 @@ function LoginPage() {
               })}
             />
 
-            {/* Password with show/hide toggle */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPw ? 'text' : 'password'}
+            {mode !== 'forgot' && (
+              <div>
+                <PasswordInput
+                  label="Password"
                   placeholder="••••••••"
-                  className="w-full px-3 py-2 pr-10 rounded-lg text-sm
-                             text-slate-800 placeholder:text-slate-400
-                             bg-white border border-slate-300
-                             hover:border-slate-400 focus:outline-none focus:ring-1
-                             focus:ring-brand-500 focus:border-brand-500 transition-colors
-                             dark:text-slate-200 dark:placeholder:text-slate-600
-                             dark:bg-surface-900 dark:border-surface-700
-                             dark:hover:border-surface-600"
+                  error={errors.password?.message}
                   {...register('password', {
-                    required: 'Password is required',
+                    required: mode !== 'forgot' && 'Password is required',
                     minLength: { value: 6, message: 'At least 6 characters required' },
                   })}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(p => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2
-                             text-slate-400 hover:text-slate-600
-                             dark:text-slate-500 dark:hover:text-slate-300"
-                >
-                  {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => switchMode('forgot')}
+                    className="text-xs text-brand-400 hover:text-brand-300 transition-colors mt-1.5"
+                  >
+                    Forgot password?
+                  </button>
+                )}
               </div>
-              {errors.password && (
-                <p className="text-xs text-red-500">{errors.password.message}</p>
-              )}
-            </div>
+            )}
 
             <Button type="submit" loading={isSubmitting} className="w-full mt-2">
-              {mode === 'login' ? 'Sign In' : 'Create Account'}
+              {mode === 'login'    && 'Sign In'}
+              {mode === 'register' && 'Create Account'}
+              {mode === 'forgot'   && 'Send Reset Link'}
             </Button>
           </form>
 
           <div className="mt-4 pt-4 border-t border-slate-200 dark:border-surface-800 text-center">
-            <button
-              onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-              className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
-            >
-              {mode === 'login'
-                ? "Don't have an account? Sign up"
-                : 'Already have an account? Sign in'}
-            </button>
+            {mode === 'forgot' ? (
+              <button
+                onClick={() => switchMode('login')}
+                className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+              >
+                Back to sign in
+              </button>
+            ) : (
+              <button
+                onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
+                className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+              >
+                {mode === 'login'
+                  ? "Don't have an account? Sign up"
+                  : 'Already have an account? Sign in'}
+              </button>
+            )}
           </div>
 
           {/* Demo hint */}
           <div className="mt-3 p-3 rounded-lg bg-slate-100 border border-slate-200
                           dark:bg-surface-800/50 dark:border-surface-700">
             <p className="text-xs text-slate-500 text-center">
-              Demo: <span className="text-slate-600 dark:text-slate-400 font-mono">demo@nexuserp.com</span>
+              Admin: <span className="text-slate-600 dark:text-slate-400 font-mono">superadmin@nexuserp.com</span>
               {' / '}
-              <span className="text-slate-600 dark:text-slate-400 font-mono">demo123456</span>
+              <span className="text-slate-600 dark:text-slate-400 font-mono">superadmin</span>
             </p>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Reset Password Page (landed on via the emailed recovery link) ──
+const resetPasswordSchema = z.object({
+  newPassword:     z.string().min(6, 'New password must be at least 6 characters'),
+  confirmPassword: z.string().min(1, 'Please confirm your new password'),
+}).refine(data => data.newPassword === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path:    ['confirmPassword'],
+})
+
+function ResetPasswordPage() {
+  const { changePassword, signOut } = useAuth()
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: { newPassword: '', confirmPassword: '' },
+  })
+
+  const onSubmit = async ({ newPassword }) => {
+    const { error } = await changePassword(newPassword)
+    if (error) {
+      toast.error(error.message)
+      return
+    }
+    toast.success('Password updated. Please sign in again.')
+    signOut()
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-surface-950 flex items-center justify-center p-4 font-sans">
+      <div className="relative w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700
+                          flex items-center justify-center mx-auto mb-4 shadow-glow">
+            <span className="text-white font-display font-bold text-xl">N</span>
+          </div>
+          <h1 className="font-display font-bold text-2xl text-slate-900 dark:text-white">NexusERP</h1>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white/80 backdrop-blur p-8
+                        dark:border-surface-800 dark:bg-surface-900/60">
+          <h2 className="font-display font-semibold text-slate-800 dark:text-slate-100 text-lg mb-6">
+            Set a new password
+          </h2>
+
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+            <PasswordInput
+              label="New Password"
+              placeholder="At least 6 characters"
+              autoComplete="new-password"
+              error={errors.newPassword?.message}
+              {...register('newPassword')}
+            />
+            <PasswordInput
+              label="Confirm New Password"
+              placeholder="Re-enter new password"
+              autoComplete="new-password"
+              error={errors.confirmPassword?.message}
+              {...register('confirmPassword')}
+            />
+
+            <Button type="submit" loading={isSubmitting} className="w-full mt-2">
+              Update Password
+            </Button>
+          </form>
         </div>
       </div>
     </div>
@@ -214,18 +292,19 @@ function BootLoader({ message = 'Loading…' }) {
  * Sequential gate. Each step must resolve before rendering children.
  *
  * Gate order:
- *   1. Auth loading    → BootLoader "Authenticating…"
- *   2. No user         → LoginPage
- *   3. Tenant loading  → BootLoader "Loading workspace…"
- *   4. No tenant       → NoTenantScreen (with sign-out)
- *   5. Permissions loading → BootLoader "Loading permissions…"
- *   6. All ready       → render children (the app layout)
+ *   1. Auth loading      → BootLoader "Authenticating…"
+ *   2. Password recovery → ResetPasswordPage (recovery link just opened)
+ *   3. No user           → LoginPage
+ *   4. Tenant loading    → BootLoader "Loading workspace…"
+ *   5. No tenant         → NoTenantScreen (with sign-out)
+ *   6. Permissions loading → BootLoader "Loading permissions…"
+ *   7. All ready         → render children (the app layout)
  *
  * Demo mode (VITE_DEMO_MODE=true): skips all gates, injects
  * mock globals so the app renders without any Supabase connection.
  */
 export default function AuthGuard({ children }) {
-  const { user, loading: authLoading, signOut }   = useAuth()
+  const { user, loading: authLoading, isRecovery, signOut } = useAuth()
   const { tenant, loading: tenantLoading, error: tenantError } = useTenant()
   const { loading: permLoading }                  = usePermissions()
   const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true'
@@ -252,18 +331,21 @@ export default function AuthGuard({ children }) {
   // Gate 1 — auth resolving
   if (authLoading)   return <BootLoader message="Authenticating…" />
 
-  // Gate 2 — not logged in
+  // Gate 2 — recovery link just opened, must set a new password first
+  if (isRecovery)    return <ResetPasswordPage />
+
+  // Gate 3 — not logged in
   if (!user)         return <LoginPage />
 
-  // Gate 3 — tenant resolving
+  // Gate 4 — tenant resolving
   if (tenantLoading) return <BootLoader message="Loading workspace…" />
 
-  // Gate 4 — user has no tenant
+  // Gate 5 — user has no tenant
   if (!tenant && tenantError) return <NoTenantScreen error={tenantError} onSignOut={signOut} />
 
-  // Gate 5 — permissions resolving
+  // Gate 6 — permissions resolving
   if (permLoading)   return <BootLoader message="Loading permissions…" />
 
-  // Gate 6 — everything ready
+  // Gate 7 — everything ready
   return children
 }

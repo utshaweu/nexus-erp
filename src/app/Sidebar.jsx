@@ -6,7 +6,7 @@ import {
   ArrowLeftRight, DollarSign, BookOpen, List, UserCog, Settings, BarChart2,
   Calendar, Cpu, TrendingDown, Tag, Wrench, CheckSquare, Clock, Send,
   GitBranch, History, Receipt, Building, Activity, CalendarDays, Puzzle,
-  Warehouse, ChevronDown, ChevronRight, Store, LogOut, ShieldCheck,
+  Warehouse, ChevronDown, ChevronRight, Store, LogOut, ShieldCheck, KeyRound,
 } from 'lucide-react'
 import registry from '@core/registry/ModuleRegistry'
 import { useTenant } from '@core/tenant/TenantContext'
@@ -14,6 +14,7 @@ import { usePermissions } from '@core/permissions/PermissionContext'
 import { useAuth } from '@shared/hooks/useAuth'
 import useStore from '@core/store/useStore'
 import toast from '@shared/lib/toast'
+import ChangePasswordModal from './ChangePasswordModal'
 
 // Maps icon name strings (from manifests) to Lucide components.
 // Adding a new icon = add one entry here. No other file changes needed.
@@ -136,6 +137,7 @@ export default function Sidebar() {
   const { sidebarOpen, setSidebarOpen } = useStore()
   const { tenant, tenantUser, isAdmin, isManager } = useTenant()
   const { user, signOut }               = useAuth()
+  const [showChangePassword, setShowChangePassword] = useState(false)
   // can() from PermissionContext — reactive, re-renders when permissions change
   const { can, canAccessModule }        = usePermissions()
 
@@ -252,19 +254,29 @@ export default function Sidebar() {
         {/* User footer */}
         <div className="border-t border-surface-200 dark:border-surface-800 p-3">
           <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg
-                          hover:bg-surface-100 dark:hover:bg-surface-800 cursor-pointer group">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-500 to-purple-600
-                            flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-              {(tenantUser?.full_name ?? user?.name ?? 'U')[0].toUpperCase()}
+                          hover:bg-surface-100 dark:hover:bg-surface-800 group">
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-500 to-purple-600
+                              flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                {(tenantUser?.full_name ?? user?.name ?? 'U')[0].toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+                  {tenantUser?.full_name ?? user?.name ?? 'User'}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-600 capitalize truncate">
+                  {tenantUser?.role ?? (user?.isSuperAdmin ? 'super admin' : 'member')}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
-                {tenantUser?.full_name ?? user?.name ?? 'User'}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-600 capitalize truncate">
-                {tenantUser?.role ?? (user?.isSuperAdmin ? 'super admin' : 'member')}
-              </p>
-            </div>
+            <button
+              onClick={() => setShowChangePassword(true)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1
+                         rounded hover:bg-surface-200 dark:hover:bg-surface-700"
+              title="Change password"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+            </button>
             <button
               onClick={() => { toast.success('Signed out successfully'); signOut() }}
               className="opacity-0 group-hover:opacity-100 transition-opacity p-1
@@ -275,6 +287,10 @@ export default function Sidebar() {
             </button>
           </div>
         </div>
+
+        {showChangePassword && (
+          <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+        )}
       </aside>
     </>
   )
