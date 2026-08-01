@@ -3,7 +3,7 @@
  *
  * Display metadata — name, description, version, icon, color, category,
  * features, dependencies, menuItems — lives in the `module_catalog` DB table
- * (see sql/nexuserp_module_catalog_addendum.sql) and is merged in by the
+ * (see sql/nexuserp_schema.sql) and is merged in by the
  * ModuleRegistry at login. This file only owns what cannot be serialised to a
  * database: the module id, its routes (lazy page imports), the Zustand store
  * slice, and the install/uninstall hooks.
