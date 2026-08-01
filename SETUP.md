@@ -35,8 +35,11 @@ Each client sees only their own data, own modules, own users — enforced at the
 
 ### 1.2 Run the schema
 1. Go to **SQL Editor** in your Supabase dashboard
-2. Paste the entire contents of `supabase_schema.sql`
-3. Click **Run** — all tables, RLS policies, functions, and indexes will be created
+2. Paste the entire contents of `sql/nexuserp_schema.sql` — this is the whole schema in
+   one file (tables, RLS, views, sequences, RPCs, triggers, indexes, module catalogue)
+3. Click **Run**
+
+The file is idempotent, so it is safe to re-run after any edit.
 
 ---
 
@@ -284,7 +287,7 @@ cp .env.example .env
 # edit .env with your Supabase URL and key
 
 # Run the schema in Supabase SQL Editor
-# (paste supabase_schema.sql)
+# (paste sql/nexuserp_schema.sql)
 
 # Start dev server
 npm run dev

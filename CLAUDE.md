@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+`ARCHITECTURE.md` is the long-form end-to-end walkthrough (boot → login → render, plus per-layer conventions). This file is the condensed working reference.
+
 ## Commands
 
 ```bash
@@ -22,6 +24,45 @@ Defined in `vite.config.js`:
 | `@core` | `src/core/` |
 | `@modules` | `src/modules/` |
 | `@shared` | `src/shared/` |
+
+## Project structure
+
+```
+src/
+├── main.jsx                  # entry → <Shell/>
+├── index.css                 # Tailwind layers + globals
+├── app/                      # the shell (not a module)
+│   ├── Shell.jsx             # ROOT: registers manifests, nests providers, theme effect
+│   ├── AuthGuard.jsx         # login / reset-password / boot-loader gates
+│   ├── Sidebar.jsx           # permission-filtered nav + ICON_MAP
+│   ├── TopBar.jsx  Home.jsx  ModuleStore.jsx  NotFound.jsx  ChangePasswordModal.jsx
+│   ├── admin/                # SuperAdminPanel, TenantUsersPanel + components/
+│   └── components/           # ModuleCard, DepWarningModal, FeatureOrganogram, …
+├── core/                     # tenant-agnostic engine — no business logic here
+│   ├── registry/ModuleRegistry.js   # plug-in engine (singleton)
+│   ├── router/DynamicRouter.jsx     # routes built from installed manifests
+│   ├── permissions/                 # permissions.js (pure) + PermissionContext.jsx
+│   ├── tenant/TenantContext.jsx
+│   ├── store/useStore.js            # Zustand
+│   └── eventbus/EventBus.js
+├── modules/<name>/           # one folder per feature module
+│   ├── index.js              # manifest (id, routes, storeSlice, hooks)
+│   ├── api/                  # ALL Supabase queries for this module
+│   ├── components/           # module-local modals, tables, cards
+│   ├── hooks/                # module-local hooks
+│   └── pages/                # route targets
+└── shared/
+    ├── api/supabase.js       # the Supabase client singleton
+    ├── components/           # ui.jsx, PermissionGate, Pagination, ListToolbar
+    ├── hooks/                # useAuth, useResourceList, useModule
+    └── lib/                  # constants, toast, moduleIcons, approvalWorkflow, …
+
+sql/                          # migrations, run by hand in the Supabase SQL editor
+```
+
+Modules: `purchase`, `sales`, `inventory`, `accounts`, `hr`, `configuration`, `reports`, `assets`, `approval`.
+
+Provider nesting in `Shell.jsx` (order is load-bearing): `BrowserRouter` → `TenantProvider` → `PermissionProvider` → `AuthProvider` → `AuthGuard` → layout (`Sidebar` + `TopBar` + `DynamicRouter`).
 
 ## Architecture
 
@@ -80,6 +121,14 @@ A menu item opts into feature-level gating via `requiredPermission.featureId` in
 - **PermissionContext**: React context for RBAC state. Depends on TenantContext.
 - **Globals**: `window.__erp_user__`, `window.__erp_tenant__`, `window.__erp_tenant_user__` — set by useAuth/TenantContext for non-React consumers (EventBus handlers, etc.).
 
+### Data layer
+
+All Supabase access lives in `src/modules/<name>/api/*.js` — pages and components never import `supabase` directly. An API function takes `tenantId` first, returns early if it's falsy, filters `.eq('tenant_id', tenantId)` (RLS also enforces it — keep both), and throws on error so the caller can toast it. List functions return `{ items, total }` and paginate with `.range()` using `PAGE_SIZE_TABLE` / `PAGE_SIZE_GRID` from `@shared/lib/constants`.
+
+List pages use `useResourceList(fetchFn, [tenantId])` (`src/shared/hooks/useResourceList.js`) — it owns pagination, search, one filter-tab group, loading, create/edit modal state, and stale-response protection. Page shape: `PageHeader` → `Card` → `ListToolbar` → `ListLoading`/`ListEmptyState`/`Table` → `Pagination` → modal. Reference implementation: `src/modules/accounts/pages/Invoices.jsx`.
+
+Status/label/colour dictionaries for every entity live in `src/shared/lib/constants.js` — add new ones there, not inline.
+
 ### Theming
 
 Class-based dark/light mode via Tailwind (`darkMode: 'class'`). The `dark` class is toggled on `<html>` by a `useEffect` in `Shell.jsx` reacting to the `theme` value in the Zustand store. A synchronous init script in `index.html` reads from `localStorage` to avoid flash on page load. Always add both light and `dark:` variants — never hardcode dark-only classes.
@@ -95,7 +144,12 @@ Class-based dark/light mode via Tailwind (`darkMode: 'class'`). The `dark` class
 | `tenants` | Client companies |
 | `tenant_users` | User ↔ tenant membership + role |
 | `tenant_modules` | Which modules a tenant has installed |
-| `tenant_user_permissions` | Per-user per-module action overrides |
+| `tenant_user_permissions` | Per-user per-module/feature action overrides |
+| `module_catalog` | DB-driven module display metadata + menu items |
+
+Business tables (`invoices`, `products`, `employees`, …) all carry `tenant_id`.
+
+The entire schema is one file: [sql/nexuserp_schema.sql](sql/nexuserp_schema.sql) — tables, RLS, indexes, sequences, RPCs, triggers, and the `module_catalog` seed. Run it by hand in the Supabase SQL editor; it is fully idempotent, so schema changes mean **editing that file and re-running it**, not adding a new one. Its header documents the conflicts resolved when the previous 26 migration files were consolidated.
 
 Configure via `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env`. Super-admin users are flagged via `user_metadata.is_super_admin = true` in Supabase Auth.
 
@@ -105,3 +159,37 @@ Configure via `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `.env`. Super-
 2. Add a row to `module_catalog` (name, description, icon, menuItems, features, etc.) — this is now MANDATORY, not optional.
 3. Register the manifest in `src/app/Shell.jsx` (the array passed to `registry.register`).
 4. Add the icon string to `ICON_MAP` in `src/app/Sidebar.jsx` if using a new Lucide icon.
+5. Add the tables (each with `tenant_id`), indexes and RLS policies to `sql/nexuserp_schema.sql`, then re-run it.
+
+### Adding a page to an existing module
+
+1. `pages/NewPage.jsx`
+2. one entry in the manifest's `routes[]`
+3. if it should appear in the nav, one entry in that module's `module_catalog.menu_items` (with `requiredPermission` if it needs gating)
+
+Router, sidebar and permission guard pick it up automatically — never register a route or nav item by hand.
+
+## Conventions (hard rules)
+
+1. **Tenant scoping** — every business-table query filters `.eq('tenant_id', tenantId)`. RLS is the second line of defence, not a replacement.
+2. **The `api/` boundary** — `supabase` is imported only in `src/modules/*/api/`, `src/shared/api/`, `src/core/`, and `src/app/admin/`. Never in a page or component.
+3. **Permission-gate every mutating control** — `<PermissionGate action="…" moduleId="…">` around create/edit/delete/approve/export buttons. Import `ACTIONS`/`ROLES` for logic; don't use raw strings.
+4. **Routes come from manifests** — never touch `DynamicRouter` to add a page, or `PermissionRoute` won't wrap it.
+5. **Nothing hardcodes a `moduleId`** in `src/core/` or `Sidebar.jsx`.
+6. **`window.__erp_*` is write-only from `useAuth.js` and `TenantContext.jsx`.** Read anywhere; write nowhere else.
+7. **Both light and `dark:` variants** on every colour class. Tailwind classes must be literal strings — interpolated class names are invisible to the JIT scanner.
+8. **Status labels/colours live in `@shared/lib/constants.js`**, base components in `@shared/components/ui`.
+9. **List pages use `useResourceList`** with a `useCallback`-wrapped `fetchFn` and `tenantId` in the dep array.
+10. **Schema changes go in `sql/nexuserp_schema.sql`** and stay idempotent. Every table: `tenant_id` + both RLS policies + indexes.
+11. **Bootstrap steps are sequential.** Don't parallelise or reorder them.
+12. **A registry `subscribe()` must return its unsubscribe** from the `useEffect`.
+
+## Tooling in `.claude/`
+
+| Path | Purpose |
+|------|---------|
+| `skills/add-module/` | Full new-module flow: manifest, catalog row, Shell registration, ICON_MAP, SQL |
+| `skills/add-list-page/` | The `useResourceList` CRUD list-page pattern |
+| `skills/add-schema-change/` | Editing `sql/nexuserp_schema.sql` — tenant column, RLS, indexes, idempotency |
+| `agents/erp-conventions.md` | Reviews a diff against the hard rules above |
+| `settings.json` | Permission allowlist (npm scripts, read-only git); `.env` denied |
