@@ -28,12 +28,12 @@ export default function ListToolbar({ search, onSearchChange, placeholder, tabs,
       {children}
 
       {tabs && (
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-surface-800">
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-surface-800 overflow-x-auto scrollbar-thin max-w-full">
           {tabs.map(t => (
             <button
               key={t.value}
               onClick={() => onTabChange(t.value)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-all flex-shrink-0 ${
                 activeTab === t.value
                   ? 'bg-white dark:bg-surface-700 text-slate-800 dark:text-slate-100 shadow-sm'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'

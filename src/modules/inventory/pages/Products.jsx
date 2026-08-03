@@ -82,12 +82,12 @@ export default function Products() {
             />
           </div>
 
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-surface-800">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-surface-800 overflow-x-auto scrollbar-thin max-w-full">
             {PRODUCT_STATUS_TABS.map(s => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all flex-shrink-0 ${
                   statusFilter === s
                     ? 'bg-white dark:bg-surface-700 text-slate-800 dark:text-slate-100 shadow-sm'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'

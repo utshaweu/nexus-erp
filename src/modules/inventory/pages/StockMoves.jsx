@@ -58,7 +58,7 @@ export default function StockMoves() {
 
       <Card>
         <div className="flex items-center gap-3 p-4 border-b border-surface-200 dark:border-surface-800 flex-wrap">
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-surface-800">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-surface-800 overflow-x-auto scrollbar-thin max-w-full">
             {STOCK_MOVE_TYPE_TABS.map(t => {
               const cfg  = t !== 'all' ? STOCK_MOVE_TYPES[t] : null
               const Icon = t !== 'all' ? MOVE_ICONS[t]       : ArrowLeftRight
@@ -66,7 +66,7 @@ export default function StockMoves() {
                 <button
                   key={t}
                   onClick={() => setTypeFilter(t)}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all flex-shrink-0 ${
                     typeFilter === t
                       ? 'bg-white dark:bg-surface-700 text-slate-800 dark:text-slate-100 shadow-sm'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'

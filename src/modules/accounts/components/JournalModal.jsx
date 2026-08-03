@@ -121,61 +121,65 @@ export default function JournalModal({ open, onClose, onSaved, entry, accounts }
             )}
 
             <div className="rounded-xl border border-surface-200 dark:border-surface-700 overflow-hidden">
-              <div className="grid grid-cols-[1fr_110px_88px_88px_32px] gap-2 px-3 py-2
-                              bg-slate-50 dark:bg-surface-800
-                              border-b border-surface-200 dark:border-surface-700">
-                {['Account', 'Note', 'Debit', 'Credit', ''].map(h => (
-                  <span key={h} className="text-xs font-medium text-slate-500 dark:text-slate-400">{h}</span>
-                ))}
-              </div>
-
-              {fields.map((field, i) => (
-                <div
-                  key={field.id}
-                  className="grid grid-cols-[1fr_110px_88px_88px_32px] gap-2 px-3 py-2
-                             border-b border-surface-100 dark:border-surface-800 last:border-0 items-center"
-                >
-                  <select
-                    className="text-sm bg-transparent border-b border-surface-200 dark:border-surface-700
-                               outline-none text-slate-800 dark:text-slate-200 py-0.5 min-w-0
-                               cursor-pointer"
-                    {...register(`lines.${i}.account_id`)}
-                  >
-                    <option value="">Select account…</option>
-                    {accounts.map(a => (
-                      <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+              <div className="overflow-x-auto scrollbar-thin">
+                <div className="min-w-[520px]">
+                  <div className="grid grid-cols-[minmax(140px,1fr)_110px_88px_88px_32px] gap-2 px-3 py-2
+                                  bg-slate-50 dark:bg-surface-800
+                                  border-b border-surface-200 dark:border-surface-700">
+                    {['Account', 'Note', 'Debit', 'Credit', ''].map(h => (
+                      <span key={h} className="text-xs font-medium text-slate-500 dark:text-slate-400">{h}</span>
                     ))}
-                  </select>
-                  <input
-                    placeholder="Note"
-                    className="text-sm bg-transparent border-b border-surface-200 dark:border-surface-700
-                               outline-none text-slate-800 dark:text-slate-200 py-0.5 min-w-0"
-                    {...register(`lines.${i}.description`)}
-                  />
-                  <input
-                    type="number" min="0" step="0.01" placeholder="0.00"
-                    className="text-sm bg-transparent border-b border-surface-200 dark:border-surface-700
-                               outline-none text-right text-slate-800 dark:text-slate-200 py-0.5 w-full"
-                    {...register(`lines.${i}.debit_amount`)}
-                  />
-                  <input
-                    type="number" min="0" step="0.01" placeholder="0.00"
-                    className="text-sm bg-transparent border-b border-surface-200 dark:border-surface-700
-                               outline-none text-right text-slate-800 dark:text-slate-200 py-0.5 w-full"
-                    {...register(`lines.${i}.credit_amount`)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fields.length > 2 && remove(i)}
-                    disabled={fields.length <= 2}
-                    className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-500/10
-                               text-slate-400 hover:text-red-500 transition-colors
-                               disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
+                  </div>
+
+                  {fields.map((field, i) => (
+                    <div
+                      key={field.id}
+                      className="grid grid-cols-[minmax(140px,1fr)_110px_88px_88px_32px] gap-2 px-3 py-2
+                                 border-b border-surface-100 dark:border-surface-800 last:border-0 items-center"
+                    >
+                      <select
+                        className="text-sm bg-transparent border-b border-surface-200 dark:border-surface-700
+                                   outline-none text-slate-800 dark:text-slate-200 py-0.5 min-w-0
+                                   cursor-pointer"
+                        {...register(`lines.${i}.account_id`)}
+                      >
+                        <option value="">Select account…</option>
+                        {accounts.map(a => (
+                          <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                        ))}
+                      </select>
+                      <input
+                        placeholder="Note"
+                        className="text-sm bg-transparent border-b border-surface-200 dark:border-surface-700
+                                   outline-none text-slate-800 dark:text-slate-200 py-0.5 min-w-0"
+                        {...register(`lines.${i}.description`)}
+                      />
+                      <input
+                        type="number" min="0" step="0.01" placeholder="0.00"
+                        className="text-sm bg-transparent border-b border-surface-200 dark:border-surface-700
+                                   outline-none text-right text-slate-800 dark:text-slate-200 py-0.5 w-full"
+                        {...register(`lines.${i}.debit_amount`)}
+                      />
+                      <input
+                        type="number" min="0" step="0.01" placeholder="0.00"
+                        className="text-sm bg-transparent border-b border-surface-200 dark:border-surface-700
+                                   outline-none text-right text-slate-800 dark:text-slate-200 py-0.5 w-full"
+                        {...register(`lines.${i}.credit_amount`)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fields.length > 2 && remove(i)}
+                        disabled={fields.length <= 2}
+                        className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-500/10
+                                   text-slate-400 hover:text-red-500 transition-colors
+                                   disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
 
             <div className="flex justify-end">
