@@ -30,6 +30,7 @@ const ICON_MAP = {
 function NavItem({ item }) {
   const Icon = ICON_MAP[item.icon] ?? LayoutDashboard
   const { pathname } = useLocation()
+  const setSidebarOpen = useStore(s => s.setSidebarOpen)
 
   // Section sub-pages (depth ≥ 2, e.g. /purchase/orders) stay active on their
   // detail routes (/purchase/orders/:id). Roots like '/' and the module
@@ -43,6 +44,7 @@ function NavItem({ item }) {
   return (
     <Link
       to={item.path}
+      onClick={() => setSidebarOpen(false)}
       className={clsx(
         'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium',
         'transition-all duration-150 border',
@@ -209,6 +211,7 @@ export default function Sidebar() {
           {isSuperAdmin && (
             <NavLink
               to="/admin"
+              onClick={() => setSidebarOpen(false)}
               className={({ isActive }) => clsx(
                 'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all border',
                 isActive
