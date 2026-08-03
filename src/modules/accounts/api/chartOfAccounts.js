@@ -19,12 +19,12 @@ export async function fetchAccounts(tenantId, { page, search, filter }) {
   return { items: data || [], total: count || 0 }
 }
 
-/** Unfiltered/unpaginated — used to populate the parent-account dropdown. */
+/** Unfiltered/unpaginated — used to populate the parent-account dropdown and the tree view. */
 export async function fetchAllAccounts(tenantId) {
   if (!tenantId) return []
   const { data } = await supabase
     .from('chart_of_accounts')
-    .select('id, code, name')
+    .select('id, code, name, account_type, is_active, parent_id')
     .eq('tenant_id', tenantId)
     .order('code')
   return data || []
